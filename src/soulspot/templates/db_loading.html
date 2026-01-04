@@ -1,0 +1,292 @@
+{# Hey future me - This template shows when the database is busy/locked!
+   Instead of showing an ugly Starlette error page, we show this friendly loading screen.
+   The page automatically retries after a few seconds using HTMX or JavaScript.
+   NO database queries are made in this template - it's purely static HTML!
+   
+   Variables:
+   - message: Optional custom message (default: "Database is busy...")
+   - retry_url: URL to retry (default: current page)
+   - retry_after: Seconds to wait before retry (default: 3)
+#}
+
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f0f0f">
+    <title>Loading... - SoulSpot</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Inline Critical CSS (no external dependencies!) -->
+    <style>
+        :root {
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-muted: #888888;
+            --accent-primary: #fe4155;
+            --accent-hover: #ff5a6c;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .loading-container {
+            text-align: center;
+            max-width: 500px;
+            padding: 2rem;
+        }
+        
+        .loading-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 2rem;
+            position: relative;
+        }
+        
+        .loading-spinner {
+            width: 100%;
+            height: 100%;
+            border: 4px solid var(--bg-secondary);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .loading-icon i {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            color: var(--accent-primary);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .loading-message {
+            color: var(--text-muted);
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        
+        .progress-container {
+            width: 200px;
+            height: 4px;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            margin: 0 auto 2rem;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-hover));
+            border-radius: 2px;
+            animation: progress {{ retry_after | default(3) }}s linear forwards;
+        }
+        
+        @keyframes progress {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+        
+        .retry-info {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        
+        .retry-countdown {
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--text-muted);
+            color: var(--text-primary);
+        }
+        
+        .btn-outline:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+        
+        .actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        
+        .tips {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--bg-secondary);
+        }
+        
+        .tips h3 {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+        
+        .tips ul {
+            list-style: none;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        
+        .tips li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .tips li::before {
+            content: "•";
+            color: var(--accent-primary);
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-container">
+        <!-- Animated Icon -->
+        <div class="loading-icon">
+            <div class="loading-spinner"></div>
+            <i class="bi bi-database"></i>
+        </div>
+        
+        <!-- Message -->
+        <h1>{{ message | default('Datenbank wird aktualisiert') }}</h1>
+        
+        <p class="loading-message">
+            SoulSpot verarbeitet gerade Daten im Hintergrund.<br>
+            Die Seite wird automatisch neu geladen, sobald die Datenbank bereit ist.
+        </p>
+        
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
+        
+        <!-- Countdown -->
+        <p class="retry-info">
+            Automatische Aktualisierung in <span class="retry-countdown" id="countdown">{{ retry_after | default(3) }}</span> Sekunden...
+        </p>
+        
+        <!-- Manual Actions -->
+        <div class="actions">
+            <button onclick="location.reload()" class="btn btn-primary">
+                <i class="bi bi-arrow-clockwise"></i>
+                Jetzt neu laden
+            </button>
+            <a href="/" class="btn btn-outline">
+                <i class="bi bi-house"></i>
+                Zur Startseite
+            </a>
+        </div>
+        
+        <!-- Tips -->
+        <div class="tips">
+            <h3>Was passiert gerade?</h3>
+            <ul>
+                <li>Hintergrund-Synchronisation läuft (Spotify, Downloads, etc.)</li>
+                <li>Die Datenbank ist kurzzeitig ausgelastet</li>
+                <li>Dies dauert normalerweise nur wenige Sekunden</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Auto-Retry Script (no external dependencies!) -->
+    <script>
+        (function() {
+            var retryAfter = {{ retry_after | default(3) }};
+            var retryUrl = "{{ retry_url | default(request.url.path) }}";
+            var countdown = document.getElementById('countdown');
+            var remaining = retryAfter;
+            
+            // Countdown timer
+            var timer = setInterval(function() {
+                remaining--;
+                if (countdown) countdown.textContent = remaining;
+                
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    // Redirect to retry URL
+                    window.location.href = retryUrl;
+                }
+            }, 1000);
+            
+            // Also listen for visibility change (tab becomes active)
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible' && remaining <= 0) {
+                    window.location.href = retryUrl;
+                }
+            });
+        })();
+    </script>
+    
+    <!-- Fallback for no-JS -->
+    <noscript>
+        <meta http-equiv="refresh" content="{{ retry_after | default(3) }};url={{ retry_url | default(request.url.path) }}">
+    </noscript>
+</body>
+</html>

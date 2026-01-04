@@ -1,0 +1,58 @@
+{# Hey future me - This partial shows when DB is busy during an HTMX request!
+   Instead of replacing content with an error, we show this loading indicator
+   that automatically retries after a few seconds using hx-trigger.
+   
+   Variables:
+   - retry_url: URL to retry (REQUIRED)
+   - retry_after: Seconds to wait before retry (default: 3)
+   - message: Optional custom message
+#}
+
+<div class="db-loading-partial" 
+     hx-get="{{ retry_url }}" 
+     hx-trigger="load delay:{{ retry_after | default(3) }}s"
+     hx-swap="outerHTML"
+     style="padding: 3rem 2rem; text-align: center;">
+    
+    <!-- Spinner -->
+    <div style="display: inline-block; width: 48px; height: 48px; border: 3px solid var(--bg-tertiary, #333); border-top-color: var(--accent-primary, #fe4155); border-radius: 50%; animation: db-spin 1s linear infinite; margin-bottom: 1.5rem;"></div>
+    
+    <!-- Message -->
+    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">
+        {{ message | default('Datenbank beschäftigt') }}
+    </h3>
+    
+    <p style="color: var(--text-muted, #888); font-size: 0.875rem; margin-bottom: 1rem;">
+        Automatischer Retry in <span id="db-countdown-{{ retry_url | hash }}" style="color: var(--accent-primary, #fe4155); font-weight: 600;">{{ retry_after | default(3) }}</span> Sekunden...
+    </p>
+    
+    <!-- Progress Bar -->
+    <div style="width: 150px; height: 3px; background: var(--bg-tertiary, #333); border-radius: 2px; margin: 0 auto; overflow: hidden;">
+        <div style="height: 100%; background: var(--accent-primary, #fe4155); animation: db-progress {{ retry_after | default(3) }}s linear forwards;"></div>
+    </div>
+    
+    <style>
+        @keyframes db-spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes db-progress {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+    </style>
+    
+    <!-- Countdown Script -->
+    <script>
+        (function() {
+            var countdown = {{ retry_after | default(3) }};
+            var el = document.getElementById('db-countdown-{{ retry_url | hash }}');
+            if (el) {
+                var timer = setInterval(function() {
+                    countdown--;
+                    el.textContent = countdown;
+                    if (countdown <= 0) clearInterval(timer);
+                }, 1000);
+            }
+        })();
+    </script>
+</div>

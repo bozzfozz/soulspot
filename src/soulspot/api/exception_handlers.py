@@ -2,15 +2,23 @@
 
 This module registers global exception handlers that convert domain exceptions
 and validation errors into proper HTTP responses with appropriate status codes.
+
+Hey future me - we also handle SQLAlchemy OperationalError here! When the database
+is busy/locked (e.g., during heavy background sync), instead of showing an ugly
+Starlette error page, we show a friendly loading page that auto-retries. This
+provides a much better UX than "database is locked" errors!
 """
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from soulspot.domain.exceptions import (
@@ -370,4 +378,86 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": exc.message},
+        )
+
+    # =========================================================================
+    # Database Busy/Locked Handler (Jan 2025)
+    # Shows a friendly loading page instead of Starlette error when DB is busy.
+    # =========================================================================
+
+    # Hey future me - we need templates for the loading page. Initialize here
+    # instead of at module level to avoid import order issues.
+    _templates_dir = Path(__file__).parent.parent / "templates"
+    _db_templates = Jinja2Templates(directory=str(_templates_dir))
+
+    @app.exception_handler(OperationalError)
+    async def database_operational_error_handler(
+        request: Request, exc: OperationalError
+    ) -> Response:
+        """Handle SQLAlchemy OperationalError with special handling for DB busy/locked.
+
+        Hey future me - when the database is busy (locked by background workers like
+        Spotify sync, download processing, etc.), we show a friendly loading page
+        instead of the ugly Starlette debug page. The loading page auto-retries after
+        a few seconds, providing a much better UX!
+
+        For HTMX requests, we return a partial that swaps in-place and retries.
+        For normal requests, we return a full loading page.
+
+        Other OperationalErrors (connection failed, etc.) still get 500 errors.
+        """
+        error_msg = str(exc).lower()
+
+        # Check if this is a "database locked" or "database busy" error
+        if "locked" in error_msg or "busy" in error_msg:
+            logger.warning(
+                "Database busy at %s - showing loading page (will auto-retry)",
+                request.url.path,
+                extra={"path": request.url.path, "error": str(exc)[:200]},
+            )
+
+            retry_url = str(request.url)
+            retry_after = 3  # seconds
+
+            # HTMX request? Return a partial that retries automatically
+            if request.headers.get("HX-Request"):
+                return _db_templates.TemplateResponse(
+                    request,
+                    "partials/db_loading.html",
+                    context={
+                        "retry_url": retry_url,
+                        "retry_after": retry_after,
+                        "message": "Datenbank beschäftigt",
+                    },
+                    status_code=200,  # 200 so HTMX swaps the content!
+                    headers={
+                        "HX-Trigger": "dbBusy",
+                        "HX-Retarget": "this",
+                        "HX-Reswap": "outerHTML",
+                    },
+                )
+
+            # Normal request? Return full loading page
+            return _db_templates.TemplateResponse(
+                request,
+                "db_loading.html",
+                context={
+                    "retry_url": retry_url,
+                    "retry_after": retry_after,
+                    "message": "Datenbank wird aktualisiert",
+                },
+                status_code=503,
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        # Other database errors (connection failed, etc.) - return 500
+        logger.error(
+            "Database error at %s: %s",
+            request.url.path,
+            str(exc)[:500],
+            extra={"path": request.url.path, "error": str(exc)[:500]},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Database error occurred. Please try again."},
         )
