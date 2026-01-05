@@ -161,9 +161,19 @@ async def browse_new_releases_page(
     for entity in library_artists_entities:
         # Only include artists with provider IDs (otherwise we can't fetch albums)
         if entity.spotify_id or entity.deezer_id:
+            # Determine source_service based on which provider ID is available
+            # Prefer deezer (no auth needed for album lookups!)
+            if entity.deezer_id:
+                source = "deezer"
+            elif entity.spotify_id:
+                source = "spotify"
+            else:
+                source = "library"  # Fallback
+
             library_artists.append(
                 ArtistDTO(
                     name=entity.name,
+                    source_service=source,  # Required field!
                     spotify_id=entity.spotify_id,
                     deezer_id=entity.deezer_id,
                     image=entity.image,
