@@ -6,6 +6,22 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Box-Drawing Logs** - New structured log format using Unicode box-drawing characters for visual Worker → Service → Operation flow tracking
+  - New `LogMessages.task_flow_*()` methods for consistent formatting
+  - Cycle headers with worker name and cycle number
+  - Provider-specific result logging (Spotify/Deezer)
+  - Duration tracking for all tasks
+  - See [Log Analysis Guide](../10-quality/log-analysis.md)
+
+### Changed
+- `UnifiedLibraryWorker` now uses Box-Drawing logs for all task execution
+- Improved log readability with visual hierarchy
+
+---
+
 ## [2.0.0] - 2025-01-06
 
 ### Documentation v2.0 Release

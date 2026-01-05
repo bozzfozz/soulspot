@@ -1,8 +1,8 @@
 # Troubleshooting Guide
 
 **Category:** User Guide  
-**Version:** 1.0  
-**Last Updated:** 2025-01  
+**Version:** 1.1  
+**Last Updated:** 2025-01-27  
 **Audience:** Users, Operators, Developers
 
 ---
@@ -24,6 +24,28 @@ curl http://localhost:8765/ready
 # Recent logs
 docker-compose logs --tail=50 soulspot
 ```
+
+### Understanding Box-Drawing Logs (NEW!)
+
+SoulSpot uses **Box-Drawing Character** formatted logs for task flows:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  🔄 UNIFIED LIBRARY MANAGER - Cycle #42                      │
+└──────────────────────────────────────────────────────────────┘
+├─► ARTIST_SYNC (started)
+│   ├─► ArtistService.sync_followed_artists_all_providers()
+│   │   ├─► SPOTIFY: ✓ 15 fetched
+│   │   └─► DEEZER: ⏭️  Skipped (provider disabled)
+└─► ✓ ARTIST_SYNC completed in 2450ms
+```
+
+**Key indicators:**
+- `✓` = Success
+- `✗` = Error  
+- `⏭️` = Skipped (provider disabled or cooldown)
+
+👉 See [Log Analysis Guide](../10-quality/log-analysis.md) for full reference.
 
 ---
 

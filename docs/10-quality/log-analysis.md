@@ -1,7 +1,7 @@
 # Log Analysis Guide
 
 **Category:** Troubleshooting / Operations  
-**Last Updated:** 2025-12-30  
+**Last Updated:** 2025-01-27  
 **Status:** ✅ Active
 
 ---
@@ -12,6 +12,64 @@ Analyze SoulSpot logs for:
 - **Debugging:** Find errors and trace request flows
 - **Monitoring:** Track worker health and performance  
 - **Troubleshooting:** Identify slow operations and bottlenecks
+
+---
+
+## New: Box-Drawing Log Format (v2025.01)
+
+SoulSpot uses structured **Box-Drawing Character** logs for visual task flow tracking.
+This makes it easy to see Worker → Service → Operation hierarchy at a glance.
+
+### Example Output
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  🔄 UNIFIED LIBRARY MANAGER - Cycle #42                      │
+└──────────────────────────────────────────────────────────────┘
+│
+├─► ARTIST_SYNC (started)
+│   ├─► ArtistService.sync_followed_artists_all_providers()
+│   │   ├─► SPOTIFY: ✓ 15 fetched
+│   │   └─► DEEZER: ⏭️  Skipped (provider disabled)
+│   └─► Total: 15 fetched, 3 created, 3 marked OWNED
+└─► ✓ ARTIST_SYNC completed in 2450ms
+
+├─► ALBUM_SYNC (started)
+│   ├─► ProviderSyncOrchestrator.sync_artist_albums() for 12 artists
+│   └─► Processed: 12 artists, 47 albums added, 0 errors
+└─► ✓ ALBUM_SYNC completed in 8230ms
+
+├─► IMAGE_SYNC (started)
+│   ├─► ImageService.download_and_cache() + URL enrichment
+│   └─► URLs: 5+12 | Downloaded: 5 artists, 12 albums (0 errors)
+└─► ✓ IMAGE_SYNC completed in 4200ms
+```
+
+### Box-Drawing Characters Reference
+
+| Character | Unicode | Name | Usage |
+|-----------|---------|------|-------|
+| `┌` | U+250C | Box Light Down And Right | Top-left corner |
+| `┐` | U+2510 | Box Light Down And Left | Top-right corner |
+| `└` | U+2514 | Box Light Up And Right | Bottom-left corner (last item) |
+| `┘` | U+2518 | Box Light Up And Left | Bottom-right corner |
+| `├` | U+251C | Box Light Vertical And Right | Branch (more items follow) |
+| `│` | U+2502 | Box Light Vertical | Vertical line |
+| `─` | U+2500 | Box Light Horizontal | Horizontal line |
+| `►` | U+25BA | Black Right-Pointing Pointer | Arrow indicator |
+
+### Log Level Indicators
+
+| Icon | Meaning |
+|------|---------|
+| `✓` | Success |
+| `✗` | Failure/Error |
+| `⏭️` | Skipped |
+| `🔄` | Cycle/Refresh |
+| `🎵` | Music-related |
+| `🖼️` | Image-related |
+| `📊` | Statistics |
+| `📥` | Download |
 
 ---
 
@@ -260,3 +318,68 @@ docker logs --tail 0 -f soulspot &  # Start fresh follow
 - [Operations Runbook](../08-guides/operations-runbook.md) - Production operations
 - [Troubleshooting Guide](../08-guides/troubleshooting-guide.md) - Common issues
 - [Observability Guide](../08-guides/observability-guide.md) - Monitoring setup
+
+---
+
+## Developer Reference: LogMessages Class
+
+The `LogMessages` class in `src/soulspot/infrastructure/observability/log_messages.py` provides 
+centralized, structured log formatting. Use these methods for consistent Box-Drawing logs:
+
+### Task Flow Methods
+
+```python
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
+# Start of a worker cycle (box header)
+logger.info(LogMessages.task_flow_cycle_start("UnifiedLibraryManager", cycle_number))
+
+# Task starting (├─► TASK_NAME)
+logger.info(LogMessages.task_flow_start("ARTIST_SYNC"))
+
+# Service being called (│   ├─► ServiceName.method())
+logger.info(LogMessages.task_flow_service("ArtistService", "sync_all()"))
+
+# Provider result in multi-provider operations
+logger.info(LogMessages.task_flow_provider("SPOTIFY", "✓ 15 fetched"))
+logger.info(LogMessages.task_flow_provider("DEEZER", "⏭️ Skipped"))
+
+# Task result/detail line
+logger.info(LogMessages.task_flow_result("Total: 15 synced, 3 created"))
+
+# Task completed with duration
+logger.info(LogMessages.task_flow_complete("ARTIST_SYNC", duration_ms=2450, success=True))
+
+# Task skipped
+logger.info(LogMessages.task_flow_skip("TRACK_SYNC", "No albums need backfill"))
+
+# Task error
+logger.error(LogMessages.task_flow_error("ALBUM_SYNC", "API rate limited"))
+```
+
+### Output Examples
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  🔄 WORKER_NAME - Cycle #N                                   │
+└──────────────────────────────────────────────────────────────┘
+│
+├─► TASK_NAME (started)
+│   ├─► ServiceName.method_name()
+│   │   ├─► PROVIDER1: ✓ result
+│   │   └─► PROVIDER2: ⏭️  skipped
+│   └─► Summary: details
+└─► ✓ TASK_NAME completed in Xms
+```
+
+### When to Use Task Flow Logs
+
+Use these logs in:
+- **Background Workers:** `unified_library_worker.py`, other `*_worker.py`
+- **Long-running Operations:** Sync, import, batch processing
+- **Multi-provider Operations:** Spotify + Deezer fallback patterns
+
+Do NOT use for:
+- **API Routes:** Use standard logging with correlation_id
+- **Simple Service Calls:** Use standard `logger.info()`
+- **Debug Messages:** Use `logger.debug()` without formatting
