@@ -171,9 +171,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         write_buffer = WriteBufferCache(
             session_factory=db.get_session_factory(),
             config=BufferConfig(
-                max_buffer_size=1000,  # Max pending writes before backpressure
-                flush_interval_seconds=5.0,  # Flush every 5s
-                flush_batch_size=100,  # Max writes per batch
+                max_pending_writes=1000,  # Max pending writes before backpressure
+                flush_interval=5.0,  # Flush every 5s
+                batch_size=100,  # Max writes per batch
                 table_priorities={  # High-write tables get priority
                     "downloads": 1,
                     "tracks": 2,
