@@ -504,6 +504,148 @@ class BrowseService:
             enabled_providers=enabled_providers,
         )
 
+    async def get_new_releases_for_library_artists(
+        self,
+        library_artists: list["ArtistDTO"],
+        days: int = 30,
+        include_singles: bool = True,
+        include_compilations: bool = True,
+    ) -> BrowseResult:
+        """Get new releases for artists in the user's LOCAL library.
+
+        Hey future me - PERSONAL New Releases from DB artists!
+        Unlike get_new_releases() which uses "followed" artists from provider APIs,
+        this method uses artists the user has added to their LOCAL library.
+
+        Strategy:
+        1. For each library artist with spotify_id → Get recent albums via Spotify
+        2. For each library artist with deezer_id → Get recent albums via Deezer
+        3. Aggregate, deduplicate, sort by release date
+        4. NO OAuth needed for Deezer artist lookup!
+
+        This allows Personal New Releases EVEN WITHOUT any provider login!
+        Artists in library have deezer_id from enrichment → fetch their releases.
+
+        Args:
+            library_artists: List of ArtistDTO from database (with spotify_id/deezer_id)
+            days: Look back period in days (default 30)
+            include_singles: Include singles/EPs
+            include_compilations: Include compilation albums
+
+        Returns:
+            BrowseResult with aggregated albums from library artists
+        """
+        from datetime import UTC, datetime, timedelta
+
+        all_albums: list[AlbumDTO] = []
+        source_counts: dict[str, int] = {"spotify": 0, "deezer": 0}
+        errors: dict[str, str] = {}
+        seen_ids: set[str] = set()
+
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
+        cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+        logger.info(
+            f"BrowseService: Checking new releases for {len(library_artists)} library artists (last {days} days)"
+        )
+
+        # Batch process artists - limit to avoid API overload
+        max_artists = min(len(library_artists), 50)  # Cap at 50 artists per request
+        processed = 0
+
+        for artist in library_artists[:max_artists]:
+            albums_found = 0
+
+            # Try Spotify first (if we have spotify_id AND plugin available AND authenticated)
+            if artist.spotify_id and self._spotify and self._spotify.is_authenticated:
+                try:
+                    albums = await self._spotify.get_artist_albums(
+                        artist_id=artist.spotify_id,
+                        limit=10,  # Recent albums only
+                    )
+                    for album in albums:
+                        # Skip duplicates
+                        album_key = album.spotify_id or album.isrc or f"{artist.name}::{album.title}"
+                        if album_key in seen_ids:
+                            continue
+
+                        # Filter by type
+                        album_type = (album.album_type or "album").lower()
+                        if album_type in ("single", "ep") and not include_singles:
+                            continue
+                        if album_type == "compilation" and not include_compilations:
+                            continue
+
+                        # Filter by date
+                        if album.release_date and album.release_date >= cutoff_str:
+                            seen_ids.add(album_key)
+                            if not album.source_service:
+                                album.source_service = "spotify"
+                            all_albums.append(album)
+                            albums_found += 1
+                            source_counts["spotify"] += 1
+
+                except Exception as e:
+                    logger.debug(f"Spotify albums fetch failed for {artist.name}: {e}")
+
+            # Try Deezer (if we have deezer_id AND plugin available - NO AUTH NEEDED!)
+            if artist.deezer_id and self._deezer:
+                try:
+                    albums_response = await self._deezer.get_artist_albums(
+                        artist_id=artist.deezer_id,
+                        limit=10,  # Recent albums only
+                    )
+                    for album in albums_response.items:
+                        # Skip duplicates (check both deezer_id and name::title)
+                        album_key = album.deezer_id or f"{artist.name}::{album.title}"
+                        if album_key in seen_ids:
+                            continue
+
+                        # Also check if same album exists from Spotify
+                        spotify_key = album.spotify_id or album.isrc
+                        if spotify_key and spotify_key in seen_ids:
+                            continue
+
+                        # Filter by type
+                        album_type = (album.album_type or "album").lower()
+                        if album_type in ("single", "ep") and not include_singles:
+                            continue
+                        if album_type == "compilation" and not include_compilations:
+                            continue
+
+                        # Filter by date
+                        if album.release_date and album.release_date >= cutoff_str:
+                            seen_ids.add(album_key)
+                            if album.deezer_id:
+                                seen_ids.add(album.deezer_id)
+                            if not album.source_service:
+                                album.source_service = "deezer"
+                            all_albums.append(album)
+                            albums_found += 1
+                            source_counts["deezer"] += 1
+
+                except Exception as e:
+                    logger.debug(f"Deezer albums fetch failed for {artist.name}: {e}")
+
+            processed += 1
+            if albums_found > 0:
+                logger.debug(f"Found {albums_found} new releases for {artist.name}")
+
+        # Sort by release date (newest first)
+        all_albums.sort(key=lambda a: a.release_date or "1900-01-01", reverse=True)
+
+        logger.info(
+            f"BrowseService: Found {len(all_albums)} total new releases from "
+            f"{processed} library artists (spotify={source_counts['spotify']}, deezer={source_counts['deezer']})"
+        )
+
+        return BrowseResult(
+            albums=all_albums,
+            source_counts=source_counts,
+            total_before_dedup=len(all_albums),  # Already deduped during collection
+            errors=errors,
+        )
+
     # ───────────────────────────────────────────────────────────────────────────
     # PRIVATE: PROVIDER FETCHERS
     # ───────────────────────────────────────────────────────────────────────────

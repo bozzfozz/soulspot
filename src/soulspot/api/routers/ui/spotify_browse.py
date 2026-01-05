@@ -54,25 +54,34 @@ async def browse_new_releases_page(
     session: AsyncSession = Depends(get_db_session),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
-    days: int = Query(default=90, ge=7, le=365, description="Days to look back"),
+    days: int = Query(default=30, ge=7, le=365, description="Days to look back"),
     include_compilations: bool = Query(
         default=True, description="Include compilations"
     ),
     include_singles: bool = Query(default=True, description="Include singles"),
     force_refresh: bool = Query(default=False, description="Force refresh from API"),
 ) -> Any:
-    """New Releases from MULTIPLE SOURCES with background caching.
+    """Personal New Releases from artists in your Library.
 
-    Hey future me - REFACTORED to use NewReleasesSyncWorker cache!
-    Background worker syncs every 30 minutes and caches results.
-    UI reads from cache for fast response. Manual refresh available via button.
+    Hey future me - REFACTORED (Jan 2025) to use LOCAL LIBRARY artists!
+    Instead of "followed" artists from provider APIs, this now shows
+    new releases from artists the user has in their local library/DB.
 
-    MULTI-SERVICE PATTERN: Works WITHOUT Spotify login!
-    Uses get_spotify_plugin_optional → returns None if not authenticated.
-    Falls back to Deezer (NO AUTH NEEDED) for new releases.
+    Strategy:
+    1. Get all artists from DB with spotify_id or deezer_id
+    2. For each: fetch recent albums from providers (Deezer no auth needed!)
+    3. Filter by release date (default: last 30 days)
+    4. Deduplicate and sort by release date
+
+    This works EVEN WITHOUT any provider login!
+    Artists in library have deezer_id from enrichment → fetch their releases.
 
     Architecture:
-        Route → Check Cache → [Fresh? Return cached] OR [Stale? Fetch live]
+        Route → Get Library Artists → For each: get recent albums
+                                                    ↓
+                                        Aggregate & Deduplicate
+                                                    ↓
+                                        Sorted by release date
                       ↓
             NewReleasesSyncWorker (background sync)
                       ↓
@@ -117,27 +126,81 @@ async def browse_new_releases_page(
     # Replaced by UnifiedLibraryManager which doesn't cache new releases.
     # This endpoint now always fetches live from providers.
     # -------------------------------------------------------------------------
-    cache_info = {"source": "live", "reason": "no_worker_available"}
+    cache_info = {"source": "live", "reason": "library_artists"}
 
     # -------------------------------------------------------------------------
-    # FETCH LIVE FROM PROVIDERS
+    # PERSONAL NEW RELEASES: From Library Artists
     # -------------------------------------------------------------------------
-    # Fetch directly via NewReleasesService (no worker cache)
+    # Hey future me - NEW STRATEGY (Jan 2025):
+    # Instead of "followed" artists from Spotify/Deezer API, we use artists
+    # that the user has in their LOCAL library (DB). This works even without
+    # any provider login! Deezer artist lookups don't need OAuth.
+    #
+    # 1. Get all library artists with spotify_id or deezer_id
+    # 2. For each: fetch recent albums from providers
+    # 3. Filter by release date (last N days)
+    # 4. Aggregate and deduplicate
+    # -------------------------------------------------------------------------
+    from soulspot.domain.dtos import ArtistDTO
+    from soulspot.infrastructure.persistence.repositories import ArtistRepository
+
+    artist_repo = ArtistRepository(session)
     service = NewReleasesService(
         spotify_plugin=spotify_plugin,
         deezer_plugin=deezer_plugin,
     )
-    try:
-        result = await service.get_all_new_releases(
-            days=days,
-            include_singles=include_singles,
-            include_compilations=include_compilations,
-            enabled_providers=enabled_providers,
-        )
-    except Exception as e:
-        logger.error(f"New Releases: Service failed: {e}")
-        error = f"Failed to fetch new releases: {e}"
-        result = None
+
+    # Get all library artists (with provider IDs)
+    library_artists_entities = await artist_repo.get_all_artists_unified(
+        limit=100,  # Cap at 100 artists for performance
+        source_filter=None,  # Include all sources
+    )
+
+    # Convert entities to DTOs for the service
+    library_artists: list[ArtistDTO] = []
+    for entity in library_artists_entities:
+        # Only include artists with provider IDs (otherwise we can't fetch albums)
+        if entity.spotify_id or entity.deezer_id:
+            library_artists.append(
+                ArtistDTO(
+                    name=entity.name,
+                    spotify_id=entity.spotify_id,
+                    deezer_id=entity.deezer_id,
+                    image=entity.image,
+                )
+            )
+
+    logger.info(f"New Releases: Found {len(library_artists)} library artists with provider IDs")
+
+    if library_artists:
+        # Get new releases for library artists
+        try:
+            result = await service.get_new_releases_for_library_artists(
+                library_artists=library_artists,
+                days=days,
+                include_singles=include_singles,
+                include_compilations=include_compilations,
+            )
+            cache_info["artists_checked"] = len(library_artists)
+        except Exception as e:
+            logger.error(f"New Releases: Library artists check failed: {e}")
+            error = f"Failed to fetch new releases: {e}"
+            result = None
+    else:
+        # Fallback: No library artists → Use editorial/global releases
+        logger.info("New Releases: No library artists, falling back to editorial releases")
+        cache_info["source"] = "editorial_fallback"
+        try:
+            result = await service.get_new_releases(
+                days=days,
+                include_singles=include_singles,
+                include_compilations=include_compilations,
+                enabled_providers=enabled_providers,
+            )
+        except Exception as e:
+            logger.error(f"New Releases: Editorial fallback failed: {e}")
+            error = f"Failed to fetch new releases: {e}"
+            result = None
 
     # -------------------------------------------------------------------------
     # CONVERT RESULT TO TEMPLATE FORMAT
