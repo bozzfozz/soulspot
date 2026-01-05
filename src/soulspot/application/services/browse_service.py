@@ -256,6 +256,220 @@ class BrowseService:
             errors=errors,
         )
 
+    async def get_new_releases_for_library_artists(
+        self,
+        library_artists: list["ArtistDTO"],
+        days: int = 30,
+        include_singles: bool = True,
+        include_compilations: bool = True,
+    ) -> BrowseResult:
+        """Get new releases from artists in user's LOCAL library (DB).
+
+        Hey future me – this is the PERSONAL NEW RELEASES feature!
+        Instead of querying "followed artists" from Spotify/Deezer API,
+        we use artists the user has in their LOCAL library/database.
+
+        This works WITHOUT provider authentication for Deezer!
+        Artist album lookups are public APIs.
+
+        Strategy:
+        1. Take library artists (already have spotify_id/deezer_id from enrichment)
+        2. For each artist: fetch recent albums from provider APIs
+        3. Filter by release date (last N days)
+        4. Aggregate and deduplicate
+        5. Sort by release date (newest first)
+
+        Args:
+            library_artists: ArtistDTOs from local database (with provider IDs)
+            days: Look back period in days (default 30)
+            include_singles: Include singles/EPs
+            include_compilations: Include compilation albums
+
+        Returns:
+            BrowseResult with albums from library artists
+        """
+        from datetime import datetime, timedelta, timezone
+
+        all_albums: list[AlbumDTO] = []
+        source_counts: dict[str, int] = {"spotify": 0, "deezer": 0}
+        errors: dict[str, str] = {}
+
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+        logger.info(
+            f"BrowseService: Fetching new releases for {len(library_artists)} "
+            f"library artists (cutoff: {cutoff_str})"
+        )
+
+        # Process artists in batches for efficiency
+        batch_size = 10  # Process 10 artists concurrently
+        for i in range(0, len(library_artists), batch_size):
+            batch = library_artists[i : i + batch_size]
+            tasks: list[tuple[str, str, asyncio.Task[list[AlbumDTO]]]] = []
+
+            for artist in batch:
+                # Prefer Deezer (no auth needed for artist albums!)
+                if artist.deezer_id and self._deezer:
+                    task = asyncio.create_task(
+                        self._fetch_artist_albums_deezer(
+                            artist_id=artist.deezer_id,
+                            artist_name=artist.name,
+                            cutoff_date=cutoff_str,
+                            include_singles=include_singles,
+                            include_compilations=include_compilations,
+                        )
+                    )
+                    tasks.append((artist.name, "deezer", task))
+
+                elif artist.spotify_id and self._spotify:
+                    if self._spotify.can_use(PluginCapability.BROWSE_NEW_RELEASES):
+                        task = asyncio.create_task(
+                            self._fetch_artist_albums_spotify(
+                                artist_id=artist.spotify_id,
+                                artist_name=artist.name,
+                                cutoff_date=cutoff_str,
+                                include_singles=include_singles,
+                                include_compilations=include_compilations,
+                            )
+                        )
+                        tasks.append((artist.name, "spotify", task))
+
+            # Wait for batch to complete
+            for artist_name, source, task in tasks:
+                try:
+                    albums = await task
+                    all_albums.extend(albums)
+                    source_counts[source] = source_counts.get(source, 0) + len(albums)
+                    if albums:
+                        logger.debug(
+                            f"BrowseService: {artist_name} has {len(albums)} "
+                            f"recent releases from {source}"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"BrowseService: Failed to fetch albums for {artist_name}: {e}"
+                    )
+
+        # Deduplicate
+        total_before = len(all_albums)
+        deduped_albums = self._deduplicate_albums(all_albums)
+
+        # Sort by release date (newest first)
+        deduped_albums.sort(key=lambda a: a.release_date or "1900-01-01", reverse=True)
+
+        logger.info(
+            f"BrowseService: Library releases {total_before} → {len(deduped_albums)} "
+            f"after dedup (spotify={source_counts['spotify']}, deezer={source_counts['deezer']})"
+        )
+
+        return BrowseResult(
+            albums=deduped_albums,
+            source_counts=source_counts,
+            total_before_dedup=total_before,
+            errors=errors,
+        )
+
+    async def _fetch_artist_albums_deezer(
+        self,
+        artist_id: str,
+        artist_name: str,
+        cutoff_date: str,
+        include_singles: bool = True,
+        include_compilations: bool = True,
+    ) -> list[AlbumDTO]:
+        """Fetch recent albums for an artist from Deezer.
+
+        Hey future me – Deezer artist/albums endpoint is PUBLIC (no auth)!
+        We can fetch any artist's discography without OAuth.
+        """
+        if not self._deezer:
+            return []
+
+        try:
+            # Use plugin's get_artist_albums if available
+            albums_response = await self._deezer.get_artist_albums(
+                artist_id=artist_id,
+                limit=50,  # Get recent albums
+            )
+
+            result: list[AlbumDTO] = []
+            albums = albums_response.items if hasattr(albums_response, "items") else albums_response
+
+            for album in albums:
+                # Filter by release date
+                if album.release_date and album.release_date < cutoff_date:
+                    continue
+
+                # Filter by album type
+                album_type = (album.album_type or "album").lower()
+                if album_type == "single" and not include_singles:
+                    continue
+                if album_type == "compilation" and not include_compilations:
+                    continue
+
+                # Set source service
+                album.source_service = "deezer"
+                album.artist_name = album.artist_name or artist_name
+                result.append(album)
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"BrowseService: Deezer albums for {artist_name} failed: {e}")
+            return []
+
+    async def _fetch_artist_albums_spotify(
+        self,
+        artist_id: str,
+        artist_name: str,
+        cutoff_date: str,
+        include_singles: bool = True,
+        include_compilations: bool = True,
+    ) -> list[AlbumDTO]:
+        """Fetch recent albums for an artist from Spotify.
+
+        Hey future me – Spotify NEEDS OAuth for artist albums!
+        This only works if user is authenticated.
+        """
+        if not self._spotify:
+            return []
+
+        try:
+            # Use plugin's get_artist_albums if available
+            albums_response = await self._spotify.get_artist_albums(
+                artist_id=artist_id,
+                limit=50,
+            )
+
+            result: list[AlbumDTO] = []
+            # PaginatedResponse has .items property!
+            albums = albums_response.items if hasattr(albums_response, "items") else albums_response
+
+            for album in albums:
+                # Filter by release date
+                if album.release_date and album.release_date < cutoff_date:
+                    continue
+
+                # Filter by album type
+                album_type = (album.album_type or "album").lower()
+                if album_type == "single" and not include_singles:
+                    continue
+                if album_type == "compilation" and not include_compilations:
+                    continue
+
+                # Set source service
+                album.source_service = "spotify"
+                album.artist_name = album.artist_name or artist_name
+                result.append(album)
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"BrowseService: Spotify albums for {artist_name} failed: {e}")
+            return []
+            return []
+
     # ───────────────────────────────────────────────────────────────────────────
     # RELATED ARTISTS
     # ───────────────────────────────────────────────────────────────────────────
