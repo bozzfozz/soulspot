@@ -188,16 +188,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Initialize LogDatabase for non-blocking logging
         log_database = LogDatabase(
-            db_path=log_db_path,  # None = use in-memory fallback
-            retention_days=7,
-            max_batch_size=50,
-            flush_interval_seconds=2.0,
+            db_path=log_db_path or "data/logs.db",  # Fallback to data/logs.db
+            batch_size=50,
+            flush_interval=2.0,
+            max_age_days=7,
         )
         app.state.log_database = log_database
-        await log_database.start()
+        await log_database.init()  # Create schema
+        await log_database.start()  # Start background flush task
+        
+        # Connect LogDatabase to Python logging system!
+        # Hey future me - THIS IS CRITICAL for the Hybrid DB Strategy!
+        # Without this handler, logs still go to main DB via stdout/stderr.
+        # With this, logs go to separate logs.db (no lock contention).
+        from soulspot.infrastructure.persistence.log_database import (
+            DatabaseLogHandler,
+        )
+        
+        db_log_handler = DatabaseLogHandler(log_database)
+        db_log_handler.setLevel(logging.INFO)  # Only INFO+ to logs.db (DEBUG is too noisy)
+        
+        # Add to root logger (soulspot namespace)
+        soulspot_logger = logging.getLogger("soulspot")
+        soulspot_logger.addHandler(db_log_handler)
+        
         logger.info(
-            "LogDatabase started: %s",
-            log_db_path if log_db_path else "in-memory (fallback)",
+            "LogDatabase started + connected to Python logging: %s",
+            log_db_path if log_db_path else "data/logs.db (default)",
         )
 
         # =================================================================
@@ -364,16 +381,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         deezer_plugin = DeezerPlugin()
 
-        # Hey future me - database= is CRITICAL for SQLite!
+        # Hey future me - database= AND write_buffer= are CRITICAL for SQLite!
         # Passing `database=db` enables session_scope_with_retry() for all DB ops.
+        # Passing `write_buffer=write_buffer` enables batched writes for hot-path ops.
         # Without this, we get massive "database is locked" errors when multiple
         # tasks (Scanner, Sync, Images, Token Refresh) write concurrently.
-        # Dec 2025 fix for SQLite lock contention.
+        # Jan 2025: Full HYBRID DB STRATEGY implementation!
         unified_library_manager = UnifiedLibraryManager(
             session_factory=db.get_session_factory(),
             spotify_plugin=spotify_plugin,
             deezer_plugin=deezer_plugin,
             database=db,  # For retry-enabled sessions (SQLite lock fix)
+            write_buffer=write_buffer,  # For batched writes (SQLite concurrency)
         )
         # Hey future me - set token_manager for automation tasks!
         # WATCHLIST_CHECK, DISCOGRAPHY_SCAN need Spotify API access.

@@ -69,6 +69,7 @@ if TYPE_CHECKING:
 
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.infrastructure.persistence.database import Database
+    from soulspot.infrastructure.persistence.write_buffer_cache import WriteBufferCache
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
@@ -555,6 +556,7 @@ class UnifiedLibraryManager:
         deezer_plugin: DeezerPlugin | None = None,
         *,
         database: "Database | None" = None,
+        write_buffer: "WriteBufferCache | None" = None,
     ) -> None:
         """Initialize the UnifiedLibraryManager.
 
@@ -565,14 +567,22 @@ class UnifiedLibraryManager:
             database: Database instance for retry-enabled sessions (optional).
                      If provided, uses session_scope_with_retry() for all DB ops
                      to avoid SQLite "database is locked" errors.
+            write_buffer: WriteBufferCache instance for batched DB writes (optional).
+                         If provided, high-frequency writes go through the buffer
+                         instead of direct session commits.
 
-        Hey future me - ALWAYS pass database= when using SQLite!
-        Without it, we use raw session_factory which has NO retry logic.
-        The retry mechanism (session_scope_with_retry) is CRITICAL for SQLite
-        because multiple workers write concurrently. Dec 2025 update.
+        Hey future me - ALWAYS pass database= AND write_buffer= when using SQLite!
+        Without database=, we use raw session_factory which has NO retry logic.
+        Without write_buffer=, all writes go directly to DB (potential lock issues).
+        
+        The HYBRID DB STRATEGY (Jan 2025):
+        1. RetryStrategy (via database.session_scope_with_retry) - For transactional ops
+        2. WriteBufferCache (via write_buffer) - For high-frequency worker writes
+        Both are CRITICAL for SQLite concurrency with multiple workers!
         """
         self._session_factory = session_factory
         self._database = database
+        self._write_buffer = write_buffer
         self._spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
 
@@ -715,7 +725,11 @@ class UnifiedLibraryManager:
         """Stop the background processing gracefully.
 
         Hey future me - this ensures clean shutdown!
-        Sets stop event, waits for current task, then exits loop.
+        Sets stop event, waits for current task, flushes buffer, then exits loop.
+        
+        HYBRID DB STRATEGY (Jan 2025):
+        Before shutdown, we force flush the WriteBuffer to ensure all
+        buffered writes are persisted. This prevents data loss on restart.
         """
         if not self._running:
             return
@@ -738,6 +752,8 @@ class UnifiedLibraryManager:
             except asyncio.CancelledError:
                 pass
 
+        # Flush any buffered writes before shutdown
+        await self._flush_buffer_if_available()
         logger.info("UnifiedLibraryManager stopped")
 
     def get_status(self) -> dict[str, Any]:
@@ -1777,6 +1793,82 @@ class UnifiedLibraryManager:
                     yield session
                 finally:
                     await session.close()
+
+    async def _buffer_entity_update(
+        self,
+        table: str,
+        key_column: str,
+        key_value: str,
+        data: dict[str, Any],
+    ) -> bool:
+        """Buffer an entity update for batched write via WriteBufferCache.
+
+        Hey future me - USE THIS for high-frequency entity updates!
+        Instead of immediate session.commit(), updates go to the buffer.
+        Buffer flushes every 5 seconds or when full.
+
+        This is part of the HYBRID DB STRATEGY (Jan 2025):
+        - Hot-path: Buffer writes → Periodic flush (no lock contention)
+        - Cold-path: Direct session with retry (transactional integrity)
+
+        Args:
+            table: Database table name (e.g., "artists", "tracks")
+            key_column: Primary key column (e.g., "id", "spotify_uri")
+            key_value: Value of the primary key
+            data: Dict of column -> value to update
+
+        Returns:
+            True if buffered successfully, False if buffer not available
+            (falls back to direct write in that case)
+
+        Example:
+            # Instead of:
+            #   artist.ownership_state = OwnershipState.OWNED
+            #   await repo.update(artist)
+            #   await session.commit()
+            #
+            # Use:
+            #   await self._buffer_entity_update(
+            #       table="artists",
+            #       key_column="id",
+            #       key_value=str(artist.id.value),
+            #       data={"ownership_state": OwnershipState.OWNED.value}
+            #   )
+        """
+        if self._write_buffer is None:
+            logger.debug(
+                "WriteBuffer not available, entity update will use direct session"
+            )
+            return False
+
+        try:
+            await self._write_buffer.buffer_update(
+                table=table,
+                key_column=key_column,
+                key_value=key_value,
+                data=data,
+            )
+            return True
+        except Exception as e:
+            logger.warning(
+                f"Failed to buffer entity update for {table}[{key_value}]: {e}. "
+                "Falling back to direct write."
+            )
+            return False
+
+    async def _flush_buffer_if_available(self) -> None:
+        """Force flush the write buffer if available.
+
+        Hey future me - call this at strategic points:
+        - After completing a batch of updates
+        - Before task completion (ensure data is persisted)
+        - On graceful shutdown
+
+        This is a no-op if WriteBuffer is not available.
+        """
+        if self._write_buffer is not None:
+            await self._write_buffer.force_flush()
+            logger.debug("WriteBuffer force flushed")
 
     async def trigger_task(self, task_type: TaskType) -> bool:
         """Manually trigger a task (bypasses cooldown for user requests).
