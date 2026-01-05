@@ -546,3 +546,132 @@ class LogMessages:
             hint=hint or "Update setting in Settings UI",
         )
         return template.format()
+
+    # === Task Flow Logs (Box-Drawing Style) ===
+    # Hey future me - these create beautiful hierarchical logs showing
+    # which Worker → Service → Operation is running!
+
+    @staticmethod
+    def task_flow_cycle_start(worker: str, cycle: int) -> str:
+        """Log start of a worker cycle with box header.
+
+        Args:
+            worker: Worker name
+            cycle: Cycle number
+        """
+        title = f"{worker} - Cycle #{cycle}"
+        width = max(60, len(title) + 4)
+        border = "─" * (width - 2)
+        padding = " " * (width - len(title) - 4)
+        return (
+            f"┌{border}┐\n"
+            f"│  {title}{padding}│\n"
+            f"└{border}┘"
+        )
+
+    @staticmethod
+    def task_flow_start(task: str, is_last: bool = False) -> str:
+        """Log task start with tree structure.
+
+        Args:
+            task: Task name (e.g., "ARTIST_SYNC")
+            is_last: If this is the last task in the cycle
+        """
+        prefix = "└─►" if is_last else "├─►"
+        return f"  │\n  {prefix} {task} (started)"
+
+    @staticmethod
+    def task_flow_service(
+        service: str,
+        method: str,
+        is_last: bool = False,
+        indent: int = 1,
+    ) -> str:
+        """Log service call within a task.
+
+        Args:
+            service: Service name (e.g., "SpotifySyncService")
+            method: Method name (e.g., "sync_followed_artists")
+            is_last: If this is the last service call
+            indent: Indentation level
+        """
+        base_indent = "  │   " * indent
+        prefix = "└─►" if is_last else "├─►"
+        return f"{base_indent}{prefix} {service}.{method}()"
+
+    @staticmethod
+    def task_flow_result(
+        message: str,
+        is_last: bool = False,
+        indent: int = 2,
+    ) -> str:
+        """Log result/detail within a service call.
+
+        Args:
+            message: Result message
+            is_last: If this is the last result line
+            indent: Indentation level
+        """
+        base_indent = "  │   " * indent
+        prefix = "└─►" if is_last else "├─►"
+        return f"{base_indent}{prefix} {message}"
+
+    @staticmethod
+    def task_flow_complete(
+        task: str,
+        duration_ms: int,
+        success: bool = True,
+        indent: int = 1,
+    ) -> str:
+        """Log task completion.
+
+        Args:
+            task: Task name
+            duration_ms: Duration in milliseconds
+            success: Whether task succeeded
+        """
+        base_indent = "  │   " * indent
+        icon = "✓" if success else "✗"
+        duration_str = f"{duration_ms / 1000:.1f}s"
+        return f"{base_indent}└─► {icon} Completed in {duration_str}"
+
+    @staticmethod
+    def task_flow_skip(task: str, reason: str) -> str:
+        """Log task skip.
+
+        Args:
+            task: Task name
+            reason: Why skipped (e.g., "cooldown", "not authenticated")
+        """
+        return f"  │\n  ├─► {task} (skipped: {reason})"
+
+    @staticmethod
+    def task_flow_provider(
+        provider: str,
+        result: str,
+        is_last: bool = False,
+        indent: int = 2,
+    ) -> str:
+        """Log provider result in multi-provider operations.
+
+        Args:
+            provider: Provider name (e.g., "Spotify", "Deezer")
+            result: Result message
+            is_last: If this is the last provider
+            indent: Indentation level
+        """
+        base_indent = "  │   " * indent
+        prefix = "└─►" if is_last else "├─►"
+        return f"{base_indent}{prefix} {provider}: {result}"
+
+    @staticmethod
+    def task_flow_error(task: str, error: str, indent: int = 1) -> str:
+        """Log task error.
+
+        Args:
+            task: Task name
+            error: Error message
+            indent: Indentation level
+        """
+        base_indent = "  │   " * indent
+        return f"{base_indent}└─► ✗ ERROR: {error}"

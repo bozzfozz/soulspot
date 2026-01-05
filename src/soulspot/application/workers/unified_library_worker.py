@@ -54,10 +54,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+from soulspot.infrastructure.observability.log_messages import LogMessages
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
@@ -775,6 +778,7 @@ class UnifiedLibraryManager:
         in the SAME cycle.
         """
         logger.info("UnifiedLibraryManager main loop started (WORKER-FIRST mode)")
+        cycle_count = 0
 
         try:
             while self._running:
@@ -796,17 +800,29 @@ class UnifiedLibraryManager:
                     # This ensures IMAGE_SYNC runs after ALBUM_SYNC completes
                     # in the same cycle, instead of ARTIST_SYNC running again.
                     tasks_run_this_iteration = 0
-                    while True:
-                        next_task = self._scheduler.get_next_task()
-                        if next_task:
-                            await self._run_task(next_task)
-                            tasks_run_this_iteration += 1
-                            # Check stop signal between tasks
-                            if self._stop_event.is_set():
+                    
+                    # Get first task to check if any work to do
+                    next_task = self._scheduler.get_next_task()
+                    if next_task:
+                        cycle_count += 1
+                        # Log cycle start with box header
+                        logger.info(LogMessages.task_flow_cycle_start(
+                            "UnifiedLibraryManager", cycle_count
+                        ))
+                        
+                        # Run first task
+                        await self._run_task(next_task)
+                        tasks_run_this_iteration += 1
+                        
+                        # Continue with remaining tasks
+                        while not self._stop_event.is_set():
+                            next_task = self._scheduler.get_next_task()
+                            if next_task:
+                                await self._run_task(next_task)
+                                tasks_run_this_iteration += 1
+                            else:
+                                # No more tasks runnable
                                 break
-                        else:
-                            # No more tasks runnable
-                            break
                     
                     if tasks_run_this_iteration == 0:
                         # No tasks ran - all on cooldown or waiting for deps
@@ -843,8 +859,10 @@ class UnifiedLibraryManager:
         Args:
             task_type: The type of task to run.
         """
-        logger.debug(f"Running task: {task_type.value}")
+        # Log task start with box-drawing tree
+        logger.info(LogMessages.task_flow_start(task_type.value.upper()))
         self._scheduler.mark_started(task_type)
+        start_time = time.monotonic()
 
         try:
             # Dispatch to correct handler
@@ -875,12 +893,21 @@ class UnifiedLibraryManager:
 
             self._scheduler.mark_completed(task_type)
             self._stats["tasks_completed"] += 1
-            logger.debug(f"Task completed: {task_type.value}")
+            
+            # Log task completion with duration
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(LogMessages.task_flow_complete(
+                task_type.value.upper(), duration_ms, success=True
+            ))
 
         except Exception as e:
             self._scheduler.mark_failed(task_type)
             self._stats["tasks_failed"] += 1
             self._stats["last_error"] = f"{task_type.value}: {e!s}"
+            
+            # Log task failure with error
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(LogMessages.task_flow_error(task_type.value.upper(), str(e)))
             logger.exception(f"Task failed: {task_type.value}")
 
     # =========================================================================
@@ -933,11 +960,31 @@ class UnifiedLibraryManager:
                 deezer_plugin=self._deezer_plugin,
             )
 
-            logger.info("🎵 Starting multi-provider artist sync...")
+            # Log service call
+            logger.info(LogMessages.task_flow_service(
+                "ArtistService", "sync_followed_artists_all_providers()"
+            ))
 
             # Sync from all providers - this returns deduplicated artists
             # and auto-syncs discography for new artists
             artists, stats = await artist_service.sync_followed_artists_all_providers()
+
+            # Log results per provider
+            provider_stats = stats.get("providers", {})
+            for provider, pstats in provider_stats.items():
+                if isinstance(pstats, dict):
+                    if "error" in pstats:
+                        logger.info(LogMessages.task_flow_provider(
+                            provider.upper(), f"❌ ERROR - {pstats['error']}"
+                        ))
+                    elif "skipped" in pstats:
+                        logger.info(LogMessages.task_flow_provider(
+                            provider.upper(), f"⏭️  Skipped ({pstats['skipped']})"
+                        ))
+                    else:
+                        logger.info(LogMessages.task_flow_provider(
+                            provider.upper(), f"✓ {pstats.get('total_fetched', 0)} fetched"
+                        ))
 
             # Update ownership_state to OWNED for all synced artists
             # This marks them as "user-selected" vs "discovered"
@@ -966,23 +1013,11 @@ class UnifiedLibraryManager:
             self._stats["artists_created"] = stats.get("total_created", 0)
             self._stats["artists_owned"] = owned_count
 
-            logger.info(
-                f"✅ Artist sync complete: {stats.get('total_fetched', 0)} fetched, "
+            # Log final result
+            logger.info(LogMessages.task_flow_result(
+                f"Total: {stats.get('total_fetched', 0)} fetched, "
                 f"{stats.get('total_created', 0)} created, {owned_count} marked OWNED"
-            )
-
-            # Log per-provider stats
-            provider_stats = stats.get("providers", {})
-            for provider, pstats in provider_stats.items():
-                if isinstance(pstats, dict):
-                    if "error" in pstats:
-                        logger.warning(f"  {provider}: ERROR - {pstats['error']}")
-                    elif "skipped" in pstats:
-                        logger.debug(f"  {provider}: Skipped ({pstats['skipped']})")
-                    else:
-                        logger.info(
-                            f"  {provider}: {pstats.get('total_fetched', 0)} fetched"
-                        )
+            ))
 
             # ================================================================
             # OPTION D+: Trigger IMAGE_SYNC immediately if new artists created
@@ -1043,7 +1078,11 @@ class UnifiedLibraryManager:
 
             # Get all OWNED artists
             owned_count = await artist_repo.count_by_ownership_state(OwnershipState.OWNED)
-            logger.info(f"Starting album sync for {owned_count} OWNED artists...")
+            
+            # Log service call with details
+            logger.info(LogMessages.task_flow_service(
+                "ProviderSyncOrchestrator", f"sync_artist_albums() for {owned_count} artists"
+            ))
 
             # Process in batches
             offset = 0
@@ -1161,11 +1200,11 @@ class UnifiedLibraryManager:
             self._stats["albums_synced"] = total_albums_added
             self._stats["tracks_synced"] = total_tracks_added
 
-            logger.info(
-                f"✅ Album sync complete: {artists_processed} artists processed, "
-                f"{total_albums_added} albums added, {total_tracks_added} tracks added, "
-                f"{errors} errors"
-            )
+            # Log final result
+            logger.info(LogMessages.task_flow_result(
+                f"Processed: {artists_processed} artists, "
+                f"{total_albums_added} albums added, {errors} errors"
+            ))
 
             # ================================================================
             # OPTION D+: Trigger IMAGE_SYNC immediately if new albums created
@@ -1224,20 +1263,19 @@ class UnifiedLibraryManager:
             auto_queue = await settings_service.auto_queue_downloads_enabled()
             batch_size = await settings_service.get_enrichment_batch_size()
 
-            logger.info(
-                f"Starting track sync (auto_queue_downloads={auto_queue})..."
-            )
-
             # Get albums needing track backfill
             albums = await album_repo.get_albums_needing_track_backfill(
                 limit=batch_size
             )
 
             if not albums:
-                logger.debug("No albums need track backfill")
+                logger.info(LogMessages.task_flow_skip("TRACK_SYNC", "No albums need track backfill"))
                 return
 
-            logger.info(f"Found {len(albums)} albums needing track backfill")
+            # Log service call
+            logger.info(LogMessages.task_flow_service(
+                "ProviderSyncOrchestrator", f"sync_album_tracks() for {len(albums)} albums"
+            ))
 
             # Create sync services with correct parameter names!
             # Hey future me - Services only created if plugins are available!
@@ -1302,10 +1340,11 @@ class UnifiedLibraryManager:
             self._stats["tracks_synced"] = tracks_added
             self._stats["tracks_created"] = tracks_added
 
-            logger.info(
-                f"✅ Track sync complete: {albums_processed} albums processed, "
-                f"{tracks_added} tracks added, {errors} errors"
-            )
+            # Log final result
+            logger.info(LogMessages.task_flow_result(
+                f"Processed: {albums_processed} albums, {tracks_added} tracks added, "
+                f"{errors} errors"
+            ))
 
     async def _queue_pending_downloads(
         self, session: "AsyncSession", track_repo: Any
@@ -1446,7 +1485,10 @@ class UnifiedLibraryManager:
             album_repo = AlbumRepository(session)
             image_service = ImageService(session=session)
 
-            logger.info("🖼️ Starting image sync (URL enrichment + local download)...")
+            # Log service call
+            logger.info(LogMessages.task_flow_service(
+                "ImageService", "download_and_cache() + URL enrichment"
+            ))
 
             # ================================================================
             # PHASE 1: URL ENRICHMENT (fetch URLs from Deezer)
@@ -1567,12 +1609,12 @@ class UnifiedLibraryManager:
 
             await session.commit()
 
-            logger.info(
-                f"✅ Image sync complete! "
+            # Log final result with Phase 1 + Phase 2 summary
+            logger.info(LogMessages.task_flow_result(
                 f"URLs: {urls_fetched['artists']}+{urls_fetched['albums']} | "
-                f"Downloads: {downloads['artists']} artists, {downloads['albums']} albums "
+                f"Downloaded: {downloads['artists']} artists, {downloads['albums']} albums "
                 f"({downloads['errors']} errors)"
-            )
+            ))
 
     async def _process_downloads(self) -> None:
         """Monitor download queue and log statistics.
@@ -1597,6 +1639,11 @@ class UnifiedLibraryManager:
         from soulspot.infrastructure.persistence.models import TrackModel
 
         async with self._get_session() as session:
+            # Log service call
+            logger.info(LogMessages.task_flow_service(
+                "DownloadStateMonitor", "count_by_state()"
+            ))
+            
             # Count tracks by download_state
             state_counts = {}
             for state in DownloadState:
@@ -1617,19 +1664,11 @@ class UnifiedLibraryManager:
             self._stats["downloads_completed"] = downloaded
             self._stats["downloads_failed"] = failed
 
-            logger.info(
-                f"📊 Download queue status: "
-                f"{pending} pending, {downloading} in progress, "
-                f"{downloaded} completed, {failed} failed"
-            )
-
-            # If there are pending downloads and QueueDispatcher isn't active,
-            # we could trigger it here. But for now, just log.
-            if pending > 0:
-                logger.info(
-                    f"📥 {pending} tracks waiting for download. "
-                    "QueueDispatcherWorker should pick them up."
-                )
+            # Log result with queue status
+            logger.info(LogMessages.task_flow_result(
+                f"Queue: {pending} pending, {downloading} downloading, "
+                f"{downloaded} done, {failed} failed"
+            ))
 
     async def _run_cleanup(self) -> None:
         """Cleanup stale data and reset failed downloads.
