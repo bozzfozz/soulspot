@@ -308,8 +308,6 @@ async def browse_new_releases_page(
 # Deezer Charts showed random "trending" content, not user's personal music.
 # This polluted the UI with content the user doesn't care about.
 # If you need charts again in the future, implement it as a separate "Discover" feature.
-
-
 @router.get("/spotify/discover", response_class=HTMLResponse)
 async def spotify_discover_page(
     request: Request,

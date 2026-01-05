@@ -262,6 +262,7 @@ class BrowseService:
         days: int = 30,
         include_singles: bool = True,
         include_compilations: bool = True,
+        enabled_providers: list[str] | None = None,
     ) -> BrowseResult:
         """Get new releases from artists in user's LOCAL library (DB).
 
@@ -290,9 +291,13 @@ class BrowseService:
         """
         from datetime import datetime, timedelta, timezone
 
+        providers = enabled_providers or ["spotify", "deezer"]
+
         all_albums: list[AlbumDTO] = []
         source_counts: dict[str, int] = {"spotify": 0, "deezer": 0}
         errors: dict[str, str] = {}
+
+        deezer_id_cache: dict[str, str] = {}
 
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
         cutoff_str = cutoff_date.strftime("%Y-%m-%d")
@@ -310,19 +315,31 @@ class BrowseService:
 
             for artist in batch:
                 # Prefer Deezer (no auth needed for artist albums!)
-                if artist.deezer_id and self._deezer:
-                    task = asyncio.create_task(
-                        self._fetch_artist_albums_deezer(
-                            artist_id=artist.deezer_id,
-                            artist_name=artist.name,
-                            cutoff_date=cutoff_str,
-                            include_singles=include_singles,
-                            include_compilations=include_compilations,
-                        )
-                    )
-                    tasks.append((artist.name, "deezer", task))
+                if "deezer" in providers and self._deezer:
+                    deezer_id = artist.deezer_id
+                    if not deezer_id:
+                        deezer_id = deezer_id_cache.get(artist.name)
+                        if deezer_id is None:
+                            deezer_id = await self._resolve_deezer_artist_id(
+                                artist_name=artist.name
+                            )
+                            if deezer_id:
+                                deezer_id_cache[artist.name] = deezer_id
 
-                elif artist.spotify_id and self._spotify:
+                    if deezer_id:
+                        task = asyncio.create_task(
+                            self._fetch_artist_albums_deezer(
+                                artist_id=deezer_id,
+                                artist_name=artist.name,
+                                cutoff_date=cutoff_str,
+                                include_singles=include_singles,
+                                include_compilations=include_compilations,
+                            )
+                        )
+                        tasks.append((artist.name, "deezer", task))
+                        continue
+
+                if "spotify" in providers and artist.spotify_id and self._spotify:
                     if self._spotify.can_use(PluginCapability.BROWSE_NEW_RELEASES):
                         task = asyncio.create_task(
                             self._fetch_artist_albums_spotify(
@@ -468,7 +485,23 @@ class BrowseService:
         except Exception as e:
             logger.warning(f"BrowseService: Spotify albums for {artist_name} failed: {e}")
             return []
-            return []
+
+    # Hey future me – personal new releases live off Deezer's PUBLIC APIs, but our DB artists
+    # often only have spotify_uri. This helper bridges that gap by resolving Deezer artist IDs
+    # via a lightweight search so we can still fetch artist albums without OAuth.
+    async def _resolve_deezer_artist_id(self, artist_name: str) -> str | None:
+        if not self._deezer:
+            return None
+
+        try:
+            # Deezer search is public; limit=1 keeps this cheap.
+            result = await self._deezer.search_artists(query=artist_name, limit=1)
+            if not result.items:
+                return None
+            return result.items[0].deezer_id
+        except Exception as e:
+            logger.debug(f"BrowseService: Deezer artist search failed for '{artist_name}': {e}")
+            return None
 
     # ───────────────────────────────────────────────────────────────────────────
     # RELATED ARTISTS

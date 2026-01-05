@@ -1453,12 +1453,18 @@ class DeezerPlugin(IMusicServicePlugin):
 
                 try:
                     # Get artist albums
-                    albums = await self.get_artist_albums(
+                    albums_response = await self.get_artist_albums(
                         artist_id=artist.deezer_id,
                         limit=20,  # Max 20 recent albums per artist
                     )
 
                     # Filter by release date and type
+                    albums = (
+                        albums_response.items
+                        if hasattr(albums_response, "items")
+                        else albums_response
+                    )
+
                     for album in albums:
                         # Skip duplicates
                         if album.deezer_id and album.deezer_id in seen_ids:
