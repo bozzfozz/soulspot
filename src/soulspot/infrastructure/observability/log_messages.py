@@ -550,6 +550,16 @@ class LogMessages:
     # === Task Flow Logs (Box-Drawing Style) ===
     # Hey future me - these create beautiful hierarchical logs showing
     # which Worker → Service → Operation is running!
+    #
+    # FIXED DESIGN (Jan 2025):
+    # Konsistente Indentierung ohne indent-Parameter:
+    # │
+    # ├─► TASK_NAME                      (Level 0)
+    # │   ├─► Service.method()           (Level 1) 
+    # │   │   ├─► Provider: result       (Level 2)
+    # │   │   └─► Provider: result       (Level 2, last)
+    # │   └─► Summary message            (Level 1, last)
+    # └─► ✓ TASK_NAME in Xs              (Level 0)
 
     @staticmethod
     def task_flow_cycle_start(worker: str, cycle: int) -> str:
@@ -559,10 +569,10 @@ class LogMessages:
             worker: Worker name
             cycle: Cycle number
         """
-        title = f"{worker} - Cycle #{cycle}"
-        width = max(60, len(title) + 4)
-        border = "─" * (width - 2)
-        padding = " " * (width - len(title) - 4)
+        title = f"🔄 {worker} - Cycle #{cycle}"
+        width = 60
+        border = "─" * width
+        padding = " " * (width - len(title) - 2)
         return (
             f"┌{border}┐\n"
             f"│  {title}{padding}│\n"
@@ -570,70 +580,49 @@ class LogMessages:
         )
 
     @staticmethod
-    def task_flow_start(task: str, is_last: bool = False) -> str:
+    def task_flow_start(task: str) -> str:
         """Log task start with tree structure.
 
         Args:
             task: Task name (e.g., "ARTIST_SYNC")
-            is_last: If this is the last task in the cycle
         """
-        prefix = "└─►" if is_last else "├─►"
-        return f"  │\n  {prefix} {task} (started)"
+        return f"│\n├─► {task}"
 
     @staticmethod
-    def task_flow_service(
-        service: str,
-        method: str,
-        is_last: bool = False,
-        indent: int = 1,
-    ) -> str:
+    def task_flow_service(service: str, method: str) -> str:
         """Log service call within a task.
 
         Args:
             service: Service name (e.g., "SpotifySyncService")
-            method: Method name (e.g., "sync_followed_artists")
-            is_last: If this is the last service call
-            indent: Indentation level
+            method: Method name (e.g., "sync_followed_artists()")
         """
-        base_indent = "  │   " * indent
-        prefix = "└─►" if is_last else "├─►"
-        return f"{base_indent}{prefix} {service}.{method}()"
+        return f"│   ├─► {service}.{method}"
 
     @staticmethod
-    def task_flow_result(
-        message: str,
-        is_last: bool = False,
-        indent: int = 2,
-    ) -> str:
-        """Log result/detail within a service call.
+    def task_flow_result(message: str) -> str:
+        """Log result/summary within a task (last item in service block).
 
         Args:
             message: Result message
-            is_last: If this is the last result line
-            indent: Indentation level
         """
-        base_indent = "  │   " * indent
-        prefix = "└─►" if is_last else "├─►"
-        return f"{base_indent}{prefix} {message}"
+        return f"│   └─► {message}"
 
     @staticmethod
     def task_flow_complete(
         task: str,
         duration_ms: int,
         success: bool = True,
-        indent: int = 1,
     ) -> str:
-        """Log task completion.
+        """Log task completion (closes the task branch).
 
         Args:
             task: Task name
             duration_ms: Duration in milliseconds
             success: Whether task succeeded
         """
-        base_indent = "  │   " * indent
         icon = "✓" if success else "✗"
         duration_str = f"{duration_ms / 1000:.1f}s"
-        return f"{base_indent}└─► {icon} Completed in {duration_str}"
+        return f"└─► {icon} {task} in {duration_str}"
 
     @staticmethod
     def task_flow_skip(task: str, reason: str) -> str:
@@ -643,14 +632,13 @@ class LogMessages:
             task: Task name
             reason: Why skipped (e.g., "cooldown", "not authenticated")
         """
-        return f"  │\n  ├─► {task} (skipped: {reason})"
+        return f"│\n├─► {task} (skipped: {reason})"
 
     @staticmethod
     def task_flow_provider(
         provider: str,
         result: str,
         is_last: bool = False,
-        indent: int = 2,
     ) -> str:
         """Log provider result in multi-provider operations.
 
@@ -658,20 +646,16 @@ class LogMessages:
             provider: Provider name (e.g., "Spotify", "Deezer")
             result: Result message
             is_last: If this is the last provider
-            indent: Indentation level
         """
-        base_indent = "  │   " * indent
-        prefix = "└─►" if is_last else "├─►"
-        return f"{base_indent}{prefix} {provider}: {result}"
+        prefix = "└" if is_last else "├"
+        return f"│   │   {prefix}─► {provider}: {result}"
 
     @staticmethod
-    def task_flow_error(task: str, error: str, indent: int = 1) -> str:
-        """Log task error.
+    def task_flow_error(task: str, error: str) -> str:
+        """Log task error (closes the task branch with error).
 
         Args:
             task: Task name
             error: Error message
-            indent: Indentation level
         """
-        base_indent = "  │   " * indent
-        return f"{base_indent}└─► ✗ ERROR: {error}"
+        return f"└─► ✗ {task} ERROR: {error}"

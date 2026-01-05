@@ -23,26 +23,39 @@ This makes it easy to see Worker → Service → Operation hierarchy at a glance
 ### Example Output
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  🔄 UNIFIED LIBRARY MANAGER - Cycle #42                      │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  🔄 UnifiedLibraryManager - Cycle #42                       │
+└────────────────────────────────────────────────────────────┘
 │
-├─► ARTIST_SYNC (started)
+├─► ARTIST_SYNC
 │   ├─► ArtistService.sync_followed_artists_all_providers()
 │   │   ├─► SPOTIFY: ✓ 15 fetched
-│   │   └─► DEEZER: ⏭️  Skipped (provider disabled)
-│   └─► Total: 15 fetched, 3 created, 3 marked OWNED
-└─► ✓ ARTIST_SYNC completed in 2450ms
+│   │   └─► DEEZER: ⏭️ Skipped (disabled)
+│   └─► Total: 15 fetched, 3 created
+└─► ✓ ARTIST_SYNC in 2.5s
 
-├─► ALBUM_SYNC (started)
-│   ├─► ProviderSyncOrchestrator.sync_artist_albums() for 12 artists
-│   └─► Processed: 12 artists, 47 albums added, 0 errors
-└─► ✓ ALBUM_SYNC completed in 8230ms
+│
+├─► ALBUM_SYNC
+│   ├─► ProviderSyncOrchestrator.sync_artist_albums()
+│   └─► 12 artists, 47 albums added
+└─► ✓ ALBUM_SYNC in 8.2s
 
-├─► IMAGE_SYNC (started)
-│   ├─► ImageService.download_and_cache() + URL enrichment
-│   └─► URLs: 5+12 | Downloaded: 5 artists, 12 albums (0 errors)
-└─► ✓ IMAGE_SYNC completed in 4200ms
+│
+├─► IMAGE_SYNC
+│   ├─► ImageService.download_and_cache()
+│   └─► 5 artists, 12 albums downloaded
+└─► ✓ IMAGE_SYNC in 4.2s
+```
+
+### Visual Hierarchy
+
+```
+Level 0: ├─► TASK_NAME                    (Task start)
+Level 1: │   ├─► Service.method()         (Service call)
+Level 2: │   │   ├─► Provider: result     (Provider details)
+         │   │   └─► Provider: result     (Last provider)
+Level 1: │   └─► Summary message          (Task result)
+Level 0: └─► ✓ TASK_NAME in Xs            (Task complete)
 ```
 
 ### Box-Drawing Characters Reference
@@ -340,36 +353,36 @@ logger.info(LogMessages.task_flow_start("ARTIST_SYNC"))
 # Service being called (│   ├─► ServiceName.method())
 logger.info(LogMessages.task_flow_service("ArtistService", "sync_all()"))
 
-# Provider result in multi-provider operations
+# Provider result in multi-provider operations (│   │   ├─► Provider: result)
 logger.info(LogMessages.task_flow_provider("SPOTIFY", "✓ 15 fetched"))
-logger.info(LogMessages.task_flow_provider("DEEZER", "⏭️ Skipped"))
+logger.info(LogMessages.task_flow_provider("DEEZER", "⏭️ Skipped", is_last=True))
 
-# Task result/detail line
+# Task result/summary (│   └─► Summary)
 logger.info(LogMessages.task_flow_result("Total: 15 synced, 3 created"))
 
-# Task completed with duration
+# Task completed with duration (└─► ✓ TASK_NAME in Xs)
 logger.info(LogMessages.task_flow_complete("ARTIST_SYNC", duration_ms=2450, success=True))
 
-# Task skipped
-logger.info(LogMessages.task_flow_skip("TRACK_SYNC", "No albums need backfill"))
+# Task skipped (├─► TASK_NAME (skipped: reason))
+logger.info(LogMessages.task_flow_skip("TRACK_SYNC", "on cooldown"))
 
-# Task error
+# Task error (└─► ✗ TASK_NAME ERROR: message)
 logger.error(LogMessages.task_flow_error("ALBUM_SYNC", "API rate limited"))
 ```
 
-### Output Examples
+### Output Structure
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  🔄 WORKER_NAME - Cycle #N                                   │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  🔄 WORKER_NAME - Cycle #N                                  │
+└────────────────────────────────────────────────────────────┘
 │
-├─► TASK_NAME (started)
-│   ├─► ServiceName.method_name()
-│   │   ├─► PROVIDER1: ✓ result
-│   │   └─► PROVIDER2: ⏭️  skipped
-│   └─► Summary: details
-└─► ✓ TASK_NAME completed in Xms
+├─► TASK_NAME                         ← task_flow_start()
+│   ├─► Service.method()              ← task_flow_service()
+│   │   ├─► PROVIDER1: ✓ result       ← task_flow_provider()
+│   │   └─► PROVIDER2: ⏭️ skipped     ← task_flow_provider(is_last=True)
+│   └─► Summary message               ← task_flow_result()
+└─► ✓ TASK_NAME in Xs                 ← task_flow_complete()
 ```
 
 ### When to Use Task Flow Logs
