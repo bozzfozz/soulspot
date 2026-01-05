@@ -2,6 +2,7 @@
 
 Hey future me - this module contains Spotify browsing and discovery pages:
 - Browse new releases (/browse/new-releases)
+- Release calendar (/browse/calendar)
 - Discover similar artists (/spotify/discover)
 - Deprecated Spotify-specific routes (redirect to unified library)
 """
@@ -630,4 +631,194 @@ async def followed_artists_page_deprecated(request: Request) -> Any:
             "reason": "Moved to auto-sync experience",
         },
         headers={"Location": "/spotify/artists"},
+    )
+
+
+# =============================================================================
+# RELEASE CALENDAR - Visual calendar for upcoming and recent releases
+# =============================================================================
+
+
+@router.get("/browse/calendar", response_class=HTMLResponse)
+async def release_calendar_page(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
+    year: int | None = Query(default=None, description="Year to display"),
+    month: int | None = Query(default=None, ge=1, le=12, description="Month to display"),
+) -> Any:
+    """Release Calendar - Visual month view of releases.
+
+    Hey future me - CALENDAR VIEW (Jan 2025)!
+    Shows upcoming and recent releases in a beautiful calendar grid.
+    Data comes from library artists' discographies.
+
+    Features:
+    - Month navigation (prev/next)
+    - Click on day to see details
+    - Source badges (Spotify/Deezer)
+    - Stats for upcoming/recent counts
+
+    Architecture:
+        Route → Get Library Artists → Fetch Albums → Group by Date
+                                                          ↓
+                                              Calendar Grid Template
+
+    Args:
+        request: FastAPI request
+        session: Database session
+        deezer_plugin: DeezerPlugin for fetching albums
+        spotify_plugin: SpotifyPlugin (optional) for fetching albums
+        year: Year to display (default: current)
+        month: Month to display (default: current)
+
+    Returns:
+        HTML page with calendar view
+    """
+    import calendar
+    from collections import defaultdict
+    from datetime import date
+
+    from soulspot.application.services.browse_service import BrowseService
+    from soulspot.domain.dtos import ArtistDTO
+    from soulspot.infrastructure.persistence.repositories import ArtistRepository
+
+    # Default to current month
+    today = date.today()
+    display_year = year or today.year
+    display_month = month or today.month
+
+    # Initialize service
+    service = BrowseService(
+        spotify_plugin=spotify_plugin,
+        deezer_plugin=deezer_plugin,
+    )
+
+    # Get library artists
+    artist_repo = ArtistRepository(session)
+    library_artists_entities = await artist_repo.get_all_artists_unified(
+        limit=100,
+        source_filter=None,
+    )
+
+    # Convert to DTOs
+    library_artists: list[ArtistDTO] = []
+    for entity in library_artists_entities:
+        if entity.deezer_id or entity.spotify_id:
+            # Determine source based on available IDs
+            if entity.deezer_id:
+                source = "deezer"
+            elif entity.spotify_id:
+                source = "spotify"
+            else:
+                source = "library"
+
+            library_artists.append(
+                ArtistDTO(
+                    name=entity.name,
+                    source_service=source,
+                    spotify_id=entity.spotify_id,
+                    deezer_id=entity.deezer_id,
+                    image=entity.image,
+                )
+            )
+
+    # Fetch releases (look at 3 months: prev, current, next)
+    # This gives us data for the visible month plus context
+    days_range = 90  # ~3 months
+    result = await service.get_new_releases_for_library_artists(
+        library_artists=library_artists,
+        days=days_range,
+    )
+
+    # Group releases by date
+    releases_by_date: dict[str, list[dict]] = defaultdict(list)
+    for album in result.albums:
+        if album.release_date:
+            # Parse release date (can be YYYY, YYYY-MM, or YYYY-MM-DD)
+            try:
+                if len(album.release_date) == 4:  # Just year
+                    release_key = f"{album.release_date}-01-01"
+                elif len(album.release_date) == 7:  # Year-month
+                    release_key = f"{album.release_date}-01"
+                else:
+                    release_key = album.release_date
+
+                releases_by_date[release_key].append({
+                    "name": album.title,
+                    "artist_name": album.artist_name,
+                    "artwork_url": album.artwork_url,
+                    "album_type": album.album_type,
+                    "total_tracks": album.total_tracks,
+                    "source": album.source,
+                    "spotify_id": album.spotify_id,
+                    "deezer_id": album.deezer_id,
+                })
+            except (ValueError, AttributeError):
+                continue
+
+    # Build calendar days
+    cal = calendar.Calendar(firstweekday=0)  # Monday first
+    month_days = list(cal.itermonthdays2(display_year, display_month))
+
+    calendar_days = []
+    for day_num, weekday in month_days:
+        if day_num == 0:
+            # Day from adjacent month
+            calendar_days.append({
+                "day": "",
+                "date": "",
+                "other_month": True,
+                "is_today": False,
+                "releases": [],
+            })
+        else:
+            day_date = date(display_year, display_month, day_num)
+            date_str = day_date.isoformat()
+            day_releases = releases_by_date.get(date_str, [])
+
+            calendar_days.append({
+                "day": day_num,
+                "date": date_str,
+                "other_month": False,
+                "is_today": day_date == today,
+                "releases": day_releases,
+            })
+
+    # Calculate stats
+    month_start = date(display_year, display_month, 1)
+    if display_month == 12:
+        next_month = date(display_year + 1, 1, 1)
+    else:
+        next_month = date(display_year, display_month + 1, 1)
+
+    upcoming_count = 0
+    recent_count = 0
+    for date_str, releases in releases_by_date.items():
+        try:
+            release_date = date.fromisoformat(date_str)
+            if release_date >= today:
+                upcoming_count += len(releases)
+            if month_start <= release_date < next_month:
+                recent_count += len(releases)
+        except ValueError:
+            continue
+
+    # Format month name
+    current_month_name = date(display_year, display_month, 1).strftime("%B %Y")
+
+    return templates.TemplateResponse(
+        "calendar.html",
+        {
+            "request": request,
+            "calendar_days": calendar_days,
+            "releases_by_date": dict(releases_by_date),
+            "current_month": current_month_name,
+            "current_year": display_year,
+            "current_month_num": display_month,
+            "upcoming_count": upcoming_count,
+            "recent_count": recent_count,
+            "artists_count": len(library_artists),
+        },
     )

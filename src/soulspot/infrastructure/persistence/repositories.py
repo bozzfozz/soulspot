@@ -520,6 +520,10 @@ class ArtistRepository(IArtistRepository):
                 if model.spotify_uri
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
+                # Hey future me - multi-service IDs for New Releases feature!
+                # deezer_id is CRITICAL for fetching artist albums without OAuth!
+                deezer_id=model.deezer_id,
+                tidal_id=model.tidal_id,
                 image=ImageRef(url=model.image_url, path=model.image_path),
                 disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],

@@ -803,10 +803,37 @@ class BrowseService:
                     logger.debug(f"Spotify albums fetch failed for {artist.name}: {e}")
 
             # Try Deezer (if we have deezer_id AND plugin available - NO AUTH NEEDED!)
-            if artist.deezer_id and self._deezer:
+            # FALLBACK: If no deezer_id, search by artist name to find it!
+            deezer_artist_id = artist.deezer_id
+            if not deezer_artist_id and self._deezer:
+                # Search for artist on Deezer to get their ID
+                try:
+                    search_result = await self._deezer.search_artists(
+                        query=artist.name,
+                        limit=3,  # Top matches only
+                    )
+                    if search_result.items:
+                        # Find best match (exact name or close)
+                        for match in search_result.items:
+                            if match.name.lower() == artist.name.lower():
+                                deezer_artist_id = match.deezer_id
+                                logger.debug(
+                                    f"Found Deezer ID {deezer_artist_id} for '{artist.name}' via search"
+                                )
+                                break
+                        # If no exact match, use first result
+                        if not deezer_artist_id and search_result.items:
+                            deezer_artist_id = search_result.items[0].deezer_id
+                            logger.debug(
+                                f"Using top Deezer match {deezer_artist_id} for '{artist.name}'"
+                            )
+                except Exception as e:
+                    logger.debug(f"Deezer artist search failed for {artist.name}: {e}")
+
+            if deezer_artist_id and self._deezer:
                 try:
                     albums_response = await self._deezer.get_artist_albums(
-                        artist_id=artist.deezer_id,
+                        artist_id=deezer_artist_id,
                         limit=10,  # Recent albums only
                     )
                     for album in albums_response.items:
