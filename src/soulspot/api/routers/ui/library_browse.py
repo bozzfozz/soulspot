@@ -359,6 +359,7 @@ async def library_albums(
             "total_tracks": total_tracks or 0,  # ALL tracks
             "local_tracks": local_tracks or 0,  # Only tracks with file_path
             "year": album.release_year,
+            "release_date": album.release_date,  # Full date (YYYY-MM-DD) or None
             "artwork_url": album.cover_url,  # Spotify CDN URL or None
             "artwork_path": album.cover_path,  # Local file path or None
             "is_compilation": "compilation" in (album.secondary_types or []),
