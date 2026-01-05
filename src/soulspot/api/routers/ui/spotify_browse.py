@@ -409,30 +409,9 @@ async def spotify_discover_page(
         f"{[a.name for a in sample_artists]}"
     )
 
-    # Get artist IDs/names for filtering (exclude artists we already have LOCALLY)
-    # IMPORTANT: Only exclude LOCAL/HYBRID artists - not pure Spotify-synced ones!
-    # User can add artists to local library even if they follow them on Spotify.
-    # Hey future me - Artist.spotify_uri is a SpotifyUri VALUE OBJECT, not a string!
-    # Use .resource_id to get the ID part from "spotify:artist:ID" -> "ID"
-    local_artist_ids: set[str] = set()  # LOCAL/HYBRID only
-    local_artist_names: set[str] = set()  # LOCAL/HYBRID only
-
-    # Use the same local_artists for exclusion - only exclude what user has locally!
-    for a in local_artists:
-        if a.spotify_uri:
-            # SpotifyUri is a value object with .resource_id property
-            local_artist_ids.add(a.spotify_uri.resource_id)
-        if a.deezer_id:
-            local_artist_ids.add(a.deezer_id)
-        if a.name:
-            local_artist_names.add(a.name.lower().strip())
-
-    logger.debug(
-        f"Discover filter: {len(local_artist_names)} LOCAL artist names to exclude"
-    )
-
-    # Hey future me - Also get ALL artists in DB (any source) for "is_in_db" badge!
-    # This lets UI show if an artist exists in DB (even if only spotify-synced).
+    # Hey future me - Get ALL artists in DB (any source) for filtering!
+    # USER REQUESTED: Only show artists that are NOT in the database at all.
+    # This includes: local, spotify, deezer, hybrid - ALL sources!
     # We do a direct query to get only the IDs we need (more efficient than loading full entities).
     stmt = select(ArtistModel.spotify_uri, ArtistModel.deezer_id, ArtistModel.name)
     db_result = await session.execute(stmt)
@@ -497,23 +476,24 @@ async def spotify_discover_page(
             for discovered in result.artists:
                 d_name_norm = discovered.name.lower().strip()
 
-                # Skip if already in LOCAL library (source='local' or 'hybrid')
-                # These artists are already in user's local collection!
-                # Hey future me - Debug logging to understand filter misses!
+                # Skip if artist is ALREADY in database (any source!)
+                # Hey future me - USER REQUESTED: Only show artists not yet in library!
+                # This means we exclude ALL existing artists (local, spotify, deezer, hybrid).
+                # Previously we only excluded LOCAL/HYBRID, but user wants pure discovery.
                 should_skip = False
                 skip_reason = ""
 
-                if d_name_norm in local_artist_names:
+                if d_name_norm in all_db_artist_names:
                     should_skip = True
-                    skip_reason = f"name match: '{d_name_norm}'"
+                    skip_reason = f"name match (in DB): '{d_name_norm}'"
                 elif (
-                    discovered.spotify_id and discovered.spotify_id in local_artist_ids
+                    discovered.spotify_id and discovered.spotify_id in all_db_artist_ids
                 ):
                     should_skip = True
-                    skip_reason = f"spotify_id match: '{discovered.spotify_id}'"
-                elif discovered.deezer_id and discovered.deezer_id in local_artist_ids:
+                    skip_reason = f"spotify_id match (in DB): '{discovered.spotify_id}'"
+                elif discovered.deezer_id and discovered.deezer_id in all_db_artist_ids:
                     should_skip = True
-                    skip_reason = f"deezer_id match: '{discovered.deezer_id}'"
+                    skip_reason = f"deezer_id match (in DB): '{discovered.deezer_id}'"
 
                 if should_skip:
                     logger.debug(
@@ -527,21 +507,9 @@ async def spotify_discover_page(
                     continue
                 seen_ids.add(key)
 
-                # Hey future me - Check if artist exists in DB AT ALL (any source)!
-                # If artist has source='spotify' (followed but not local), user can still
-                # "Add to Library" which will upgrade them to 'hybrid'.
-                # This flag helps UI show appropriate button/badge.
-                is_in_db = (
-                    d_name_norm in all_db_artist_names
-                    or (
-                        discovered.spotify_id
-                        and discovered.spotify_id in all_db_artist_ids
-                    )
-                    or (
-                        discovered.deezer_id
-                        and discovered.deezer_id in all_db_artist_ids
-                    )
-                )
+                # Hey future me - is_in_db is ALWAYS False here!
+                # We already filtered out all DB artists above.
+                # This field is kept for template compatibility but will always be False.
 
                 discoveries.append(
                     {
@@ -553,7 +521,7 @@ async def spotify_discover_page(
                         "popularity": discovered.popularity or 0,
                         "based_on": artist.name,
                         "source": discovered.source_service,
-                        "is_in_db": is_in_db,  # True if artist exists in DB (any source)
+                        "is_in_db": False,  # Always False - we filtered out DB artists!
                     }
                 )
 
