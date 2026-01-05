@@ -141,6 +141,66 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Database initialized: %s", settings.database.url)
 
         # =================================================================
+        # Initialize Hybrid DB Strategy Components (Jan 2025)
+        # =================================================================
+        # Hey future me - this is the HYBRID DB STRATEGY for SQLite concurrency!
+        # Instead of long busy_timeout (blocking), we use:
+        # 1. WriteBufferCache: Buffers worker writes in RAM, flushes in batches
+        # 2. LogDatabase: Separate DB for logs (no lock contention with main DB)
+        # 3. RetryStrategy: Already exists in retry.py (exponential backoff)
+        # See: docs/architecture/HYBRID_DB_STRATEGY.md for full details.
+        #
+        # Flow:
+        # - API operations: Direct DB access with RetryStrategy (@with_db_retry)
+        # - Worker writes: Buffered via WriteBufferCache, flushed periodically
+        # - Logging: Goes to LogDatabase (best-effort, never crashes app)
+        from soulspot.infrastructure.persistence.log_database import LogDatabase
+        from soulspot.infrastructure.persistence.write_buffer_cache import (
+            BufferConfig,
+            WriteBufferCache,
+        )
+
+        # Determine log database path (next to main DB)
+        log_db_path = None
+        if "sqlite" in settings.database.url:
+            main_db_path = settings._get_sqlite_db_path()
+            if main_db_path:
+                log_db_path = str(main_db_path.parent / "soulspot_logs.db")
+
+        # Initialize WriteBufferCache for worker write batching
+        write_buffer = WriteBufferCache(
+            session_factory=db.get_session_factory(),
+            config=BufferConfig(
+                max_buffer_size=1000,  # Max pending writes before backpressure
+                flush_interval_seconds=5.0,  # Flush every 5s
+                flush_batch_size=100,  # Max writes per batch
+                table_priorities={  # High-write tables get priority
+                    "downloads": 1,
+                    "tracks": 2,
+                    "artists": 3,
+                    "albums": 4,
+                },
+            ),
+        )
+        app.state.write_buffer = write_buffer
+        await write_buffer.start()
+        logger.info("WriteBufferCache started (batch size=100, interval=5s)")
+
+        # Initialize LogDatabase for non-blocking logging
+        log_database = LogDatabase(
+            db_path=log_db_path,  # None = use in-memory fallback
+            retention_days=7,
+            max_batch_size=50,
+            flush_interval_seconds=2.0,
+        )
+        app.state.log_database = log_database
+        await log_database.start()
+        logger.info(
+            "LogDatabase started: %s",
+            log_db_path if log_db_path else "in-memory (fallback)",
+        )
+
+        # =================================================================
         # Load runtime settings from DB (log level, etc.)
         # =================================================================
         # Hey future me - this is the STARTUP HOOK for dynamic settings!
@@ -956,7 +1016,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception as e:
                 logger.exception("Error stopping auto-import service: %s", e)
 
-        # 4. Close database connection
+        # 4. Shutdown Hybrid DB Strategy components (BEFORE closing database!)
+        # Hey future me - ORDER MATTERS! We must flush WriteBufferCache BEFORE
+        # closing the database connection, otherwise pending writes are lost!
+        try:
+            if hasattr(app.state, "write_buffer"):
+                logger.info("Flushing WriteBufferCache...")
+                await app.state.write_buffer.stop()  # Flushes remaining writes
+                stats = app.state.write_buffer.get_stats()
+                logger.info(
+                    "WriteBufferCache stopped: %d writes buffered, %d flushed total",
+                    stats.get("pending_count", 0),
+                    stats.get("total_flushed", 0),
+                )
+        except Exception as e:
+            logger.exception("Error stopping WriteBufferCache: %s", e)
+
+        try:
+            if hasattr(app.state, "log_database"):
+                logger.info("Stopping LogDatabase...")
+                await app.state.log_database.stop()  # Flushes pending logs
+                logger.info("LogDatabase stopped")
+        except Exception as e:
+            logger.exception("Error stopping LogDatabase: %s", e)
+
+        # 5. Close database connection
         try:
             if hasattr(app.state, "db"):
                 await app.state.db.close()

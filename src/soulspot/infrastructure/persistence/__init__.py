@@ -7,6 +7,7 @@ from .batch_utils import (
     batch_update,
 )
 from .database import Database
+from .log_database import LogDatabase
 from .models import (
     AlbumModel,
     ArtistModel,
@@ -38,6 +39,12 @@ from .retry import (
     execute_with_retry,
     is_lock_error,
     with_db_retry,
+)
+from .write_buffer_cache import (
+    BufferConfig,
+    PendingWrite,
+    WriteBufferCache,
+    WriteOperation,
 )
 
 __all__ = [
@@ -77,4 +84,10 @@ __all__ = [
     "batch_insert",
     "batch_update",
     "IncrementalCommitter",
+    # Hybrid DB Strategy (Jan 2025)
+    "WriteBufferCache",
+    "BufferConfig",
+    "PendingWrite",
+    "WriteOperation",
+    "LogDatabase",
 ]

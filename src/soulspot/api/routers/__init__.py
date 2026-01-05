@@ -17,6 +17,7 @@ from soulspot.api.routers import (
     automation,
     blocklist,
     compilations,
+    debug_db,
     download_manager,
     downloads,
     enrichment,
@@ -69,6 +70,7 @@ api_router.include_router(
     quality_profiles.router, prefix="/quality-profiles", tags=["Quality Profiles"]
 )
 api_router.include_router(blocklist.router, prefix="/blocklist", tags=["Blocklist"])
+api_router.include_router(debug_db.router, tags=["Debug"])  # Hybrid DB Strategy debug
 
 __all__ = [
     "api_router",
@@ -78,6 +80,7 @@ __all__ = [
     "automation",
     "blocklist",
     "compilations",
+    "debug_db",
     "download_manager",
     "downloads",
     "enrichment",

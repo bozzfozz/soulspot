@@ -64,12 +64,18 @@ class Database:
             #
             # Trade-off: Slightly more overhead from opening/closing connections, but SQLite
             # opens are fast (~1ms) and the reliability gain is worth it.
+            #
+            # UPDATE (Jan 2025): Hybrid DB Strategy - reduced timeout to 500ms!
+            # Old: 60s timeout = long wait when locked, UI freezes
+            # New: 500ms timeout = fail fast, let RetryStrategy handle with exponential backoff
+            # This matches Lidarr's approach (they use 100ms + Polly retry).
+            # See: docs/architecture/HYBRID_DB_STRATEGY.md
             engine_kwargs.update(
                 {
                     "poolclass": NullPool,  # No connection caching - each session gets fresh connection
                     "connect_args": {
                         "check_same_thread": False,
-                        "timeout": 60,  # Wait up to 60s for lock
+                        "timeout": 0.5,  # 500ms - fail fast, RetryStrategy handles retries
                     },
                 }
             )
@@ -130,9 +136,11 @@ class Database:
             # This prevents "database is locked" errors during library scans
             cursor.execute("PRAGMA journal_mode=WAL")
 
-            # Set busy timeout to 60s (increased from 30s, Dec 2025)
-            # Matches connect_args timeout - needed for heavy concurrent writes
-            cursor.execute("PRAGMA busy_timeout=60000")
+            # Set busy timeout to 500ms (reduced from 60s, Jan 2025 - Hybrid Strategy)
+            # Fail fast approach - let RetryStrategy handle retries with exponential backoff
+            # This matches Lidarr's approach (they use 100ms + Polly retry)
+            # See: docs/architecture/HYBRID_DB_STRATEGY.md
+            cursor.execute("PRAGMA busy_timeout=500")
 
             # === PERFORMANCE OPTIMIZATIONS (Dec 2025 v2) ===
             # synchronous=NORMAL: Faster than FULL, safe with WAL mode
@@ -156,7 +164,7 @@ class Database:
             cursor.close()
             logger.debug(
                 "SQLite optimizations enabled: foreign_keys, WAL, "
-                "busy_timeout=60s, cache=64MB, mmap=256MB"
+                "busy_timeout=500ms, cache=64MB, mmap=256MB (Hybrid Strategy)"
             )
 
     # Listen future me, this is a GENERATOR (note the yield!), not a regular async function.
