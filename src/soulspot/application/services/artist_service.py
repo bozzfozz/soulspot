@@ -741,10 +741,16 @@ class ArtistService:
         self,
         artist_name: str,
         deezer_artist_id: str | None = None,
-    ) -> list:
-        """Fetch artist albums from Deezer WITH PAGINATION."""
+    ) -> tuple[list, str | None]:
+        """Fetch artist albums from Deezer WITH PAGINATION.
+        
+        Returns:
+            Tuple of (album_list, resolved_deezer_id).
+            resolved_deezer_id is the Deezer artist ID found via search (if not provided).
+            This allows the caller to store the found ID on the artist for future use.
+        """
         if not self._deezer_plugin:
-            return []
+            return [], None
 
         try:
             resolved_deezer_id = deezer_artist_id
@@ -754,10 +760,10 @@ class ArtistService:
                     query=artist_name, limit=5
                 )
                 if not search_result.items:
-                    return []
+                    return [], None
                 resolved_deezer_id = search_result.items[0].deezer_id
                 if not resolved_deezer_id:
-                    return []
+                    return [], None
 
             all_albums: list = []
             offset = 0
@@ -772,11 +778,11 @@ class ArtistService:
                     break
                 offset = response.next_offset
 
-            return all_albums
+            return all_albums, resolved_deezer_id
 
         except Exception as e:
             logger.warning(f"Deezer albums lookup failed: {e}")
-            return []
+            return [], None
 
     async def sync_artist_discography_complete(
         self,
@@ -849,11 +855,19 @@ class ArtistService:
         # 2. Fallback to Deezer
         if not albums_dtos and self._deezer_plugin and artist.name:
             try:
-                albums_dtos = await self._fetch_albums_from_deezer(
+                albums_dtos, found_deezer_id = await self._fetch_albums_from_deezer(
                     artist_name=artist.name, deezer_artist_id=artist.deezer_id
                 )
                 if albums_dtos:
                     source = "deezer"
+                    # Store the found deezer_id on the artist for future use!
+                    # This ensures the next sync doesn't need to search by name again.
+                    if found_deezer_id and not artist.deezer_id:
+                        artist.deezer_id = found_deezer_id
+                        await self.artist_repo.update(artist)
+                        logger.info(
+                            f"🔗 Stored Deezer ID {found_deezer_id} for {artist.name}"
+                        )
             except Exception as e:
                 logger.warning(f"Deezer album fetch failed: {e}")
 

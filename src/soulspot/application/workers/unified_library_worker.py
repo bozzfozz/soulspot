@@ -1175,13 +1175,36 @@ class UnifiedLibraryManager:
                         #
                         # Wenn Artist nur deezer_id hat (kein spotify_id), 
                         # wird Spotify übersprungen und nur Deezer verwendet.
-                        # Wenn Artist keinen Provider hat, wird der Artist übersprungen.
+                        # Wenn Artist keinen Provider hat, nutze ArtistService.sync_artist_discography_complete
+                        # das den Artist über den Namen sucht!
                         
-                        # Skip artists without any provider ID
+                        # For artists WITHOUT provider IDs (e.g., from library scan):
+                        # Use ArtistService.sync_artist_discography_complete which searches by NAME
+                        # and stores the found provider ID! (Jan 2026 - replaces background syncs)
                         if not artist.spotify_id and not artist.deezer_id:
-                            logger.debug(
-                                f"Skipping {artist.name}: No provider ID (neither Spotify nor Deezer)"
+                            from soulspot.application.services.artist_service import (
+                                ArtistService,
                             )
+                            artist_service = ArtistService(
+                                session=session,
+                                spotify_plugin=self._spotify_plugin,
+                                deezer_plugin=self._deezer_plugin,
+                            )
+                            try:
+                                stats = await artist_service.sync_artist_discography_complete(
+                                    artist_id=str(artist.id.value),
+                                    include_tracks=False,  # Tracks synced separately in TRACK_SYNC
+                                )
+                                if stats["albums_added"] > 0:
+                                    total_albums_added += stats["albums_added"]
+                                    artists_processed += 1
+                                    logger.info(
+                                        f"✅ {artist.name}: {stats['albums_added']} albums "
+                                        f"via name search (source: {stats['source']})"
+                                    )
+                            except Exception as e:
+                                errors += 1
+                                logger.warning(f"Failed to sync {artist.name} by name: {e}")
                             continue
                         
                         result = await orchestrator.sync_artist_albums(

@@ -57,10 +57,10 @@ logger = logging.getLogger(__name__)
 
 # AUDIO_EXTENSIONS is now imported from folder_parsing module (single source of truth)
 
-# Hey future me - Semaphore to limit concurrent background discography syncs!
-# SQLite can only handle ONE writer at a time - parallel writes cause "database is locked".
-# Limit to 2 concurrent syncs (one writing, one waiting for lock).
-_DISCOGRAPHY_SYNC_SEMAPHORE = asyncio.Semaphore(2)
+# DEPRECATED (Jan 2026): Background discography sync semaphore no longer used!
+# UnifiedLibraryManager now handles ALL album syncing sequentially.
+# Keeping for reference but can be removed in future cleanup.
+# _DISCOGRAPHY_SYNC_SEMAPHORE = asyncio.Semaphore(2)
 
 
 class LibraryScannerService:
@@ -111,89 +111,31 @@ class LibraryScannerService:
         )
 
     # =========================================================================
-    # AUTO-DISCOGRAPHY SYNC (for LOCAL artists after scan)
+    # DEPRECATED: AUTO-DISCOGRAPHY SYNC (Jan 2026)
+    # =========================================================================
+    # This method is NO LONGER USED! Keeping for reference only.
+    # Background discography syncs caused "database is locked" errors because
+    # they ran PARALLEL to UnifiedLibraryManager's ALBUM_SYNC cycle.
+    #
+    # The UnifiedLibraryManager now handles ALL album syncing sequentially.
+    # New artists from library scan are marked OWNED and synced in the next
+    # UnifiedLibraryManager cycle (within 60 seconds typically).
     # =========================================================================
 
     async def _background_discography_sync(
         self, artist_id: str, artist_name: str
     ) -> None:
-        """Background task to sync discography for a newly scanned LOCAL artist.
-
-        Hey future me - SAME LOGIC as artists.py _background_discography_sync!
-        When local folder is scanned, new artists should get their FULL discography
-        from providers (Spotify/Deezer). This ensures LOCAL artists are treated
-        the same as "Add to Library" button artists.
-
-        GOTCHA: Must create own DB session! The scan session may be busy/committed.
-        Create fresh Database instance with settings and use session_scope().
-
-        CRITICAL: Uses semaphore to limit concurrent writes to SQLite!
-        SQLite can only handle ONE writer at a time - parallel writes cause
-        "database is locked" errors. Semaphore ensures max 2 tasks (1 writing, 1 waiting).
-
-        Args:
-            artist_id: The artist UUID (string format)
-            artist_name: Artist name for logging
+        """DEPRECATED: Background task to sync discography.
+        
+        This method is no longer called! Left for reference only.
+        UnifiedLibraryManager now handles all album syncing to avoid
+        parallel write conflicts with SQLite.
         """
-        # Acquire semaphore to limit concurrent database writes
-        async with _DISCOGRAPHY_SYNC_SEMAPHORE:
-            from soulspot.application.services.artist_service import ArtistService
-            from soulspot.config import get_settings
-            from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
-            from soulspot.infrastructure.persistence.database import Database
-            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-
-            logger.info(f"🎵 Background discography sync starting for LOCAL artist: {artist_name}")
-
-            try:
-                # Create fresh Database instance for background task
-                settings = get_settings()
-                db = Database(settings)
-                async with db.session_scope() as session:
-                    # Create plugins - DeezerPlugin doesn't need auth for album lookup
-                    # SpotifyPlugin will be None if user not authenticated
-                    deezer_plugin = DeezerPlugin()
-
-                    # Try to create SpotifyPlugin from stored session tokens
-                    # Hey future me - SpotifyPlugin REQUIRES client parameter!
-                    # It won't work without a proper SpotifyClient instance.
-                    spotify_plugin = None
-                    try:
-                        spotify_client = SpotifyClient(settings.spotify)
-                        spotify_plugin = SpotifyPlugin(
-                            client=spotify_client, access_token=None
-                        )
-                    except Exception:
-                        # No Spotify auth available, Deezer fallback will be used
-                        pass
-
-                    service = ArtistService(
-                        session=session,
-                        spotify_plugin=spotify_plugin,
-                        deezer_plugin=deezer_plugin,
-                    )
-
-                    stats = await service.sync_artist_discography_complete(
-                        artist_id=artist_id,
-                        include_tracks=True,
-                    )
-
-                    await session.commit()
-
-                    logger.info(
-                        f"✅ Background discography sync complete for {artist_name}: "
-                        f"albums={stats['albums_added']}/{stats['albums_total']}, "
-                        f"tracks={stats['tracks_added']}/{stats['tracks_total']} "
-                        f"(source: {stats['source']})"
-                    )
-
-            except Exception as e:
-                # Log but don't fail - this is a background task
-                logger.error(
-                    f"❌ Background discography sync failed for {artist_name}: {e}",
-                    exc_info=True,
-                )
+        # DEPRECATED - This code path is no longer executed
+        logger.warning(
+            f"⚠️ DEPRECATED: _background_discography_sync called for {artist_name}. "
+            "This should not happen - UnifiedLibraryManager handles album sync now."
+        )
 
     # =========================================================================
     # MAIN SCAN METHODS
@@ -462,37 +404,28 @@ class LibraryScannerService:
             )
 
             # ================================================================
-            # AUTO-DISCOGRAPHY SYNC for newly created LOCAL artists!
-            # Hey future me - this is THE KEY to unified library behavior!
-            # When user scans local folder, new artists should get their FULL
-            # discography from providers (just like "Add to Library" button).
-            # This runs as background tasks so scan returns immediately.
+            # AUTO-DISCOGRAPHY SYNC - DISABLED (Jan 2026)
+            # ================================================================
+            # Hey future me - Background discography syncs were causing
+            # "database is locked" errors because they ran PARALLEL to
+            # UnifiedLibraryManager's ALBUM_SYNC cycle!
+            #
+            # BEFORE: 12 background tasks + UnifiedLibraryManager = DB LOCK HELL
+            # AFTER:  UnifiedLibraryManager handles ALL album syncing SEQUENTIALLY
+            #
+            # The UnifiedLibraryManager already does ALBUM_SYNC for all OWNED artists
+            # in its regular cycle. New artists from library scan get marked OWNED
+            # and will be synced in the NEXT UnifiedLibraryManager cycle.
+            #
+            # This eliminates parallel writes and "database is locked" errors!
             # ================================================================
             if newly_created_artist_ids:
                 logger.info(
-                    f"🎵 Queuing auto-discography sync for {len(newly_created_artist_ids)} "
-                    "new LOCAL artists..."
+                    f"📋 {len(newly_created_artist_ids)} new LOCAL artists detected. "
+                    "Discography will be synced by UnifiedLibraryManager in next cycle."
                 )
-                for artist_id_str, artist_name in newly_created_artist_ids:
-                    try:
-                        # Create background task for discography sync
-                        # Uses same method as "Add to Library" button!
-                        asyncio.create_task(
-                            self._background_discography_sync(
-                                artist_id=artist_id_str,
-                                artist_name=artist_name,
-                            )
-                        )
-                        stats["discography_sync_queued"] += 1
-                    except Exception as e:
-                        logger.warning(
-                            f"⚠️ Failed to queue discography sync for {artist_name}: {e}"
-                        )
-
-                logger.info(
-                    f"✅ Queued {stats['discography_sync_queued']} discography syncs "
-                    "(running in background)"
-                )
+                # Mark that new artists exist (for potential UI notification)
+                stats["new_artists_pending_sync"] = len(newly_created_artist_ids)
             
             end_operation(
                 logger,
