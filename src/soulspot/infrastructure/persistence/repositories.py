@@ -5813,6 +5813,12 @@ class ProviderBrowseRepository:
                 model.cover_path = image_path
             model.release_date = release_date
             model.release_date_precision = release_date_precision
+            # FIX: Extract release_year from release_date for UI display!
+            if release_date and not model.release_year:
+                try:
+                    model.release_year = int(release_date[:4])
+                except (ValueError, TypeError):
+                    pass
             model.primary_type = album_type  # album_type → primary_type
             model.total_tracks = total_tracks
             # Only set is_saved to True, never back to False via this method
@@ -5820,6 +5826,14 @@ class ProviderBrowseRepository:
                 model.is_saved = True
             model.updated_at = now
         else:
+            # FIX: Extract release_year from release_date for UI display!
+            release_year = None
+            if release_date:
+                try:
+                    release_year = int(release_date[:4])
+                except (ValueError, TypeError):
+                    pass
+            
             model = AlbumModel(
                 title=name,
                 artist_id=internal_artist_id,
@@ -5827,6 +5841,7 @@ class ProviderBrowseRepository:
                 cover_url=image_url,
                 cover_path=image_path,
                 release_date=release_date,
+                release_year=release_year,  # FIX: Set release_year for UI!
                 release_date_precision=release_date_precision,
                 primary_type=album_type,  # album_type → primary_type
                 total_tracks=total_tracks,

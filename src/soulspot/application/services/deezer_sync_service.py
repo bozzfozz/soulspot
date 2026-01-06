@@ -885,6 +885,24 @@ class DeezerSyncService:
                 # Update existing - Model.cover_url ist DB-Spalte
                 existing.title = album_dto.title
                 existing.cover_url = dto_cover_url or existing.cover_url
+                
+                # FIX: Update release_year if missing and we have release_date
+                if album_dto.release_date and not existing.release_year:
+                    try:
+                        existing.release_year = int(album_dto.release_date[:4])
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Update release_date if missing
+                if album_dto.release_date and not existing.release_date:
+                    existing.release_date = album_dto.release_date
+                    # Set precision based on date format
+                    if len(album_dto.release_date) == 10:
+                        existing.release_date_precision = "day"
+                    elif len(album_dto.release_date) == 7:
+                        existing.release_date_precision = "month"
+                    elif len(album_dto.release_date) == 4:
+                        existing.release_date_precision = "year"
 
                 # Smart-Logic: Queue cover download nur wenn kein lokales Bild
                 if self._image_service and album_dto.deezer_id and dto_cover_url:
@@ -930,6 +948,25 @@ class DeezerSyncService:
                             album_dto.deezer_id, dto_cover_url, provider="deezer"
                         )
 
+                # Extract release_year from release_date (if available)
+                # Hey future me - release_date is "YYYY-MM-DD" or "YYYY", release_year is int!
+                release_year = None
+                if album_dto.release_date:
+                    try:
+                        release_year = int(album_dto.release_date[:4])
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Determine release_date_precision from date format
+                release_date_precision = None
+                if album_dto.release_date:
+                    if len(album_dto.release_date) == 10:  # YYYY-MM-DD
+                        release_date_precision = "day"
+                    elif len(album_dto.release_date) == 7:  # YYYY-MM
+                        release_date_precision = "month"
+                    elif len(album_dto.release_date) == 4:  # YYYY
+                        release_date_precision = "year"
+
                 # Create new with artist relationship
                 new_album = AlbumModel(
                     id=str(uuid.uuid4()),
@@ -939,6 +976,8 @@ class DeezerSyncService:
                     cover_url=dto_cover_url,
                     cover_path=cover_path,
                     release_date=album_dto.release_date,
+                    release_year=release_year,  # FIX: Extract year for UI display!
+                    release_date_precision=release_date_precision,
                     total_tracks=album_dto.total_tracks,
                     primary_type=album_dto.primary_type or "Album",
                     source="deezer",

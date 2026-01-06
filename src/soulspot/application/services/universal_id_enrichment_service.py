@@ -361,6 +361,16 @@ class UniversalIdEnrichmentService:
                                 f"Skipping deezer_id {found_id} for '{album.title}' - "
                                 f"already used by '{existing.title}'"
                             )
+                            # STILL save cover URL even if ID is duplicate!
+                            # The album needs a cover regardless of ID conflicts.
+                            if cover_url and (not album.cover or not album.cover.url):
+                                from soulspot.domain.value_objects import ImageRef
+                                album.cover = ImageRef(
+                                    url=cover_url,
+                                    path=album.cover.path if album.cover else None,
+                                )
+                                result.cover_url_found = True
+                                logger.debug(f"Saved cover URL for '{album.title}' (ID was duplicate)")
                         else:
                             album.deezer_id = found_id
                             result.deezer_id_found = True
@@ -395,6 +405,15 @@ class UniversalIdEnrichmentService:
                                 f"Skipping spotify_uri {found_uri} for '{album.title}' - "
                                 f"already used by '{existing.title}'"
                             )
+                            # STILL save cover URL even if ID is duplicate!
+                            if cover_url and (not album.cover or not album.cover.url):
+                                from soulspot.domain.value_objects import ImageRef
+                                album.cover = ImageRef(
+                                    url=cover_url,
+                                    path=album.cover.path if album.cover else None,
+                                )
+                                result.cover_url_found = True
+                                logger.debug(f"Saved cover URL for '{album.title}' (Spotify ID was duplicate)")
                         else:
                             album.spotify_uri = spotify_uri_obj
                             result.spotify_id_found = True
@@ -464,6 +483,10 @@ class UniversalIdEnrichmentService:
         Hey future me - Tracks sind BESONDERS wichtig weil ISRC universal ist!
         Wenn wir ISRC haben, können wir direkt auf allen Services suchen.
         
+        CRITICAL: Same UNIQUE constraint issue as albums!
+        Name-search can return SAME deezer_id for DIFFERENT tracks.
+        Example: Same song on different compilations → same Deezer track ID
+        
         Args:
             track: Track entity to enrich
             artist_name: Artist name for better search
@@ -486,14 +509,23 @@ class UniversalIdEnrichmentService:
                         search_query, existing_isrc=track.isrc
                     )
                     if found_id:
-                        track.deezer_id = found_id
-                        result.deezer_id_found = True
-                        logger.debug(f"Found Deezer ID for track '{track.title}': {found_id}")
-                    
-                        # Bonus: Also get ISRC if missing
-                        if isrc and not track.isrc:
-                            track.isrc = isrc
-                            result.isrc_found = True
+                        # CRITICAL: Check if this deezer_id already exists!
+                        # Same song on different compilations → same Deezer track ID
+                        existing = await self._get_track_repo().get_by_deezer_id(found_id)
+                        if existing and str(existing.id.value) != str(track.id.value):
+                            logger.debug(
+                                f"Skipping deezer_id {found_id} for '{track.title}' - "
+                                f"already used by '{existing.title}'"
+                            )
+                        else:
+                            track.deezer_id = found_id
+                            result.deezer_id_found = True
+                            logger.debug(f"Found Deezer ID for track '{track.title}': {found_id}")
+                        
+                            # Bonus: Also get ISRC if missing
+                            if isrc and not track.isrc:
+                                track.isrc = isrc
+                                result.isrc_found = True
                         
                     await asyncio.sleep(self._request_delay)
                 except Exception as e:
@@ -508,13 +540,23 @@ class UniversalIdEnrichmentService:
                     )
                     if found_uri:
                         from soulspot.domain.value_objects import SpotifyUri
-                        track.spotify_uri = SpotifyUri.from_string(found_uri)
-                        result.spotify_id_found = True
-                        logger.debug(f"Found Spotify URI for track '{track.title}': {found_uri}")
                         
-                        if isrc and not track.isrc:
-                            track.isrc = isrc
-                            result.isrc_found = True
+                        # CRITICAL: Check if this spotify_uri already exists!
+                        spotify_uri_obj = SpotifyUri.from_string(found_uri)
+                        existing = await self._get_track_repo().get_by_spotify_uri(spotify_uri_obj)
+                        if existing and str(existing.id.value) != str(track.id.value):
+                            logger.debug(
+                                f"Skipping spotify_uri {found_uri} for '{track.title}' - "
+                                f"already used by '{existing.title}'"
+                            )
+                        else:
+                            track.spotify_uri = spotify_uri_obj
+                            result.spotify_id_found = True
+                            logger.debug(f"Found Spotify URI for track '{track.title}': {found_uri}")
+                            
+                            if isrc and not track.isrc:
+                                track.isrc = isrc
+                                result.isrc_found = True
                         
                     await asyncio.sleep(self._request_delay)
                 except Exception as e:
