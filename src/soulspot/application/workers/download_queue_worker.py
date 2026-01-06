@@ -196,11 +196,22 @@ class DownloadQueueWorker:
 
             except Exception as e:
                 self._errors_total += 1
-                logger.error(
-                    "download_queue.loop_error",
-                    exc_info=True,
-                    extra={"error_type": type(e).__name__, "cycle": self._cycles_completed},
+                
+                # Hey future me - Smart error logging to avoid log spam!
+                # Connection errors are EXPECTED when slskd is not running.
+                is_connection_error = any(
+                    err in type(e).__name__
+                    for err in ["ConnectError", "ConnectionError", "OSError", "TimeoutError"]
                 )
+                
+                if not is_connection_error:
+                    # Non-connection error - log with trace
+                    logger.error(
+                        "download_queue.loop_error",
+                        exc_info=True,
+                        extra={"error_type": type(e).__name__, "cycle": self._cycles_completed},
+                    )
+                # Connection errors: handled by _check_slskd_available() with log suppression
 
             await asyncio.sleep(self._check_interval)
 

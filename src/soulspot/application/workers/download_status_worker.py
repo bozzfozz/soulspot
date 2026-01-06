@@ -309,11 +309,25 @@ class DownloadStatusWorker:
             except Exception as e:
                 self._errors_total += 1
                 self._handle_sync_failure(e)
-                logger.error(
-                    "download_status.loop_error",
-                    exc_info=True,
-                    extra={"error_type": type(e).__name__, "cycle": self._cycles_completed},
+                
+                # Hey future me - Connection errors are already logged in _poll_cycle()!
+                # Only log non-connection errors here to avoid spam.
+                # Connection errors: ConnectError, ConnectionError, OSError, TimeoutError
+                is_connection_error = any(
+                    err in type(e).__name__
+                    for err in ["ConnectError", "ConnectionError", "OSError", "TimeoutError"]
                 )
+                
+                if not is_connection_error:
+                    # Non-connection errors (DB issues, unexpected exceptions) - log with trace
+                    logger.error(
+                        "download_status.loop_error",
+                        exc_info=True,
+                        extra={"error_type": type(e).__name__, "cycle": self._cycles_completed},
+                    )
+                # Connection errors: already logged appropriately in _poll_cycle()
+                # Circuit breaker handles the retry logic
+                
                 self._stats["last_error"] = str(e)
 
             # Dynamic sleep with backoff
@@ -357,19 +371,38 @@ class DownloadStatusWorker:
             return True
 
         except Exception as e:
-            # Log connection errors appropriately
+            # Hey future me - Smart error logging to avoid log spam!
+            # Connection errors are EXPECTED when slskd is not running.
+            # We only log:
+            # - First connection error (warning)
+            # - Every 10th consecutive failure (info) to show it's still trying
+            # - Non-connection errors (error with trace)
             is_connection_error = any(
-                err in str(type(e).__name__)
-                for err in ["ConnectError", "ConnectionError", "OSError"]
+                err in type(e).__name__
+                for err in ["ConnectError", "ConnectionError", "OSError", "TimeoutError"]
             )
 
-            if is_connection_error and self._consecutive_failures == 0:
-                logger.warning(
-                    "⚠️ slskd not available (expected if not configured). "
-                    "Configure SLSKD_URL and SLSKD_API_KEY in settings."
+            if is_connection_error:
+                if self._consecutive_failures == 0:
+                    # First failure - log warning
+                    logger.warning(
+                        "⚠️ slskd not available (expected if not configured). "
+                        "Configure SLSKD_URL and SLSKD_API_KEY in settings. "
+                        "Circuit breaker will handle retries silently."
+                    )
+                elif self._consecutive_failures % 10 == 0:
+                    # Every 10th failure - brief status
+                    logger.info(
+                        f"slskd still unavailable (attempt {self._consecutive_failures + 1}), "
+                        f"circuit: {self._circuit_state}"
+                    )
+                # Otherwise: silent - circuit breaker handles it
+            else:
+                # Non-connection error - always log with details
+                logger.error(
+                    f"slskd poll error (attempt {self._consecutive_failures + 1}): {e}",
+                    exc_info=True
                 )
-            elif self._consecutive_failures >= 2:
-                logger.error(f"slskd connection error (attempt {self._consecutive_failures + 1}): {e}")
 
             raise
 

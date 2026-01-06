@@ -39,6 +39,11 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from soulspot.domain.entities import Album, Artist, Track
+    from soulspot.infrastructure.persistence.repositories import (
+        AlbumRepository,
+        ArtistRepository,
+        TrackRepository,
+    )
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
@@ -106,6 +111,12 @@ class UniversalIdEnrichmentService:
     
         await enrichment_service.enrich_artists_missing_ids(batch_size=50)
         await enrichment_service.enrich_albums_missing_ids(batch_size=50)
+    
+    CRITICAL: Name-search kann GLEICHE IDs für VERSCHIEDENE Entities finden!
+    Beispiel: "Greatest Hits" und "Greatest Hits (Deluxe)" → gleiche Deezer ID
+    
+    Deshalb: VOR dem Setzen einer ID prüfen ob sie bereits existiert!
+    Sonst: UNIQUE constraint violation → Session rollback → Task fails!
     """
     
     def __init__(
@@ -131,6 +142,33 @@ class UniversalIdEnrichmentService:
         
         # Rate limiting
         self._request_delay = 0.2  # 200ms between requests
+        
+        # Lazy-init repositories for duplicate checking
+        # Hey future me - wir brauchen diese um UNIQUE constraint violations zu vermeiden!
+        self._artist_repo: "ArtistRepository | None" = None
+        self._album_repo: "AlbumRepository | None" = None
+        self._track_repo: "TrackRepository | None" = None
+    
+    def _get_artist_repo(self) -> "ArtistRepository":
+        """Lazy-init artist repository."""
+        if self._artist_repo is None:
+            from soulspot.infrastructure.persistence.repositories import ArtistRepository
+            self._artist_repo = ArtistRepository(self._session)
+        return self._artist_repo
+    
+    def _get_album_repo(self) -> "AlbumRepository":
+        """Lazy-init album repository."""
+        if self._album_repo is None:
+            from soulspot.infrastructure.persistence.repositories import AlbumRepository
+            self._album_repo = AlbumRepository(self._session)
+        return self._album_repo
+    
+    def _get_track_repo(self) -> "TrackRepository":
+        """Lazy-init track repository."""
+        if self._track_repo is None:
+            from soulspot.infrastructure.persistence.repositories import TrackRepository
+            self._track_repo = TrackRepository(self._session)
+        return self._track_repo
     
     # ========================================================================
     # ARTIST ENRICHMENT
@@ -144,8 +182,9 @@ class UniversalIdEnrichmentService:
         
         1. Check existing IDs
         2. For each MISSING ID, search by name at that provider
-        3. Match by name similarity (fuzzy match)
-        4. Store found ID for future direct lookups
+        3. CRITICAL: Check if found ID already exists (avoid UNIQUE constraint!)
+        4. Match by name similarity (fuzzy match)
+        5. Store found ID for future direct lookups
         
         Args:
             artist: Artist entity to enrich
@@ -161,18 +200,28 @@ class UniversalIdEnrichmentService:
                 try:
                     found_id, image_url = await self._search_artist_on_deezer(artist.name)
                     if found_id:
-                        artist.deezer_id = found_id
-                        result.deezer_id_found = True
-                        logger.debug(f"Found Deezer ID for artist '{artist.name}': {found_id}")
-                        
-                        # Bonus: Also get image if missing
-                        if image_url and (not artist.image or not artist.image.url):
-                            from soulspot.domain.value_objects import ImageRef
-                            artist.image = ImageRef(
-                                url=image_url,
-                                path=artist.image.path if artist.image else None,
+                        # CRITICAL: Check if this deezer_id already exists!
+                        # Name-search can return SAME ID for DIFFERENT artists
+                        # (e.g., "Queen" local artist vs "Queen" from Deezer)
+                        existing = await self._get_artist_repo().get_by_deezer_id(found_id)
+                        if existing and str(existing.id.value) != str(artist.id.value):
+                            logger.debug(
+                                f"Skipping deezer_id {found_id} for '{artist.name}' - "
+                                f"already used by '{existing.name}'"
                             )
-                            result.image_url_found = True
+                        else:
+                            artist.deezer_id = found_id
+                            result.deezer_id_found = True
+                            logger.debug(f"Found Deezer ID for artist '{artist.name}': {found_id}")
+                            
+                            # Bonus: Also get image if missing
+                            if image_url and (not artist.image or not artist.image.url):
+                                from soulspot.domain.value_objects import ImageRef
+                                artist.image = ImageRef(
+                                    url=image_url,
+                                    path=artist.image.path if artist.image else None,
+                                )
+                                result.image_url_found = True
                             
                     await asyncio.sleep(self._request_delay)
                 except Exception as e:
@@ -186,18 +235,28 @@ class UniversalIdEnrichmentService:
                     found_uri, image_url = await self._search_artist_on_spotify(artist.name)
                     if found_uri:
                         from soulspot.domain.value_objects import SpotifyUri
-                        artist.spotify_uri = SpotifyUri.from_string(found_uri)
-                        result.spotify_id_found = True
-                        logger.debug(f"Found Spotify URI for artist '{artist.name}': {found_uri}")
                         
-                        # Bonus: Also get image if missing and Deezer didn't find one
-                        if image_url and (not artist.image or not artist.image.url):
-                            from soulspot.domain.value_objects import ImageRef
-                            artist.image = ImageRef(
-                                url=image_url,
-                                path=artist.image.path if artist.image else None,
+                        # CRITICAL: Check if this spotify_uri already exists!
+                        spotify_uri_obj = SpotifyUri.from_string(found_uri)
+                        existing = await self._get_artist_repo().get_by_spotify_uri(spotify_uri_obj)
+                        if existing and str(existing.id.value) != str(artist.id.value):
+                            logger.debug(
+                                f"Skipping spotify_uri {found_uri} for '{artist.name}' - "
+                                f"already used by '{existing.name}'"
                             )
-                            result.image_url_found = True
+                        else:
+                            artist.spotify_uri = spotify_uri_obj
+                            result.spotify_id_found = True
+                            logger.debug(f"Found Spotify URI for artist '{artist.name}': {found_uri}")
+                            
+                            # Bonus: Also get image if missing and Deezer didn't find one
+                            if image_url and (not artist.image or not artist.image.url):
+                                from soulspot.domain.value_objects import ImageRef
+                                artist.image = ImageRef(
+                                    url=image_url,
+                                    path=artist.image.path if artist.image else None,
+                                )
+                                result.image_url_found = True
                             
                     await asyncio.sleep(self._request_delay)
                 except Exception as e:
@@ -265,6 +324,14 @@ class UniversalIdEnrichmentService:
         """
         Enrich a single album with provider IDs.
         
+        Hey future me - CRITICAL BUG FIXED HERE!
+        
+        Problem: Name-search returns SAME deezer_id for DIFFERENT albums!
+        Example: "Greatest Hits" and "Greatest Hits (Deluxe)" → same Deezer album
+        Result: UNIQUE constraint violation → Session rollback → Task fails
+        
+        Solution: Check if found ID already exists BEFORE setting it!
+        
         Args:
             album: Album entity to enrich
             artist_name: Artist name for better search results
@@ -285,18 +352,28 @@ class UniversalIdEnrichmentService:
                 try:
                     found_id, cover_url = await self._search_album_on_deezer(search_query)
                     if found_id:
-                        album.deezer_id = found_id
-                        result.deezer_id_found = True
-                        logger.debug(f"Found Deezer ID for album '{album.title}': {found_id}")
-                        
-                        # Bonus: Also get cover if missing
-                        if cover_url and (not album.cover or not album.cover.url):
-                            from soulspot.domain.value_objects import ImageRef
-                            album.cover = ImageRef(
-                                url=cover_url,
-                                path=album.cover.path if album.cover else None,
+                        # CRITICAL: Check if this deezer_id already exists!
+                        # Name-search can return SAME ID for DIFFERENT albums
+                        # (e.g., "Greatest Hits" vs "Greatest Hits (Deluxe)")
+                        existing = await self._get_album_repo().get_by_deezer_id(found_id)
+                        if existing and str(existing.id.value) != str(album.id.value):
+                            logger.debug(
+                                f"Skipping deezer_id {found_id} for '{album.title}' - "
+                                f"already used by '{existing.title}'"
                             )
-                            result.cover_url_found = True
+                        else:
+                            album.deezer_id = found_id
+                            result.deezer_id_found = True
+                            logger.debug(f"Found Deezer ID for album '{album.title}': {found_id}")
+                            
+                            # Bonus: Also get cover if missing
+                            if cover_url and (not album.cover or not album.cover.url):
+                                from soulspot.domain.value_objects import ImageRef
+                                album.cover = ImageRef(
+                                    url=cover_url,
+                                    path=album.cover.path if album.cover else None,
+                                )
+                                result.cover_url_found = True
                             
                     await asyncio.sleep(self._request_delay)
                 except Exception as e:
@@ -309,17 +386,27 @@ class UniversalIdEnrichmentService:
                     found_uri, cover_url = await self._search_album_on_spotify(search_query)
                     if found_uri:
                         from soulspot.domain.value_objects import SpotifyUri
-                        album.spotify_uri = SpotifyUri.from_string(found_uri)
-                        result.spotify_id_found = True
-                        logger.debug(f"Found Spotify URI for album '{album.title}': {found_uri}")
                         
-                        if cover_url and (not album.cover or not album.cover.url):
-                            from soulspot.domain.value_objects import ImageRef
-                            album.cover = ImageRef(
-                                url=cover_url,
-                                path=album.cover.path if album.cover else None,
+                        # CRITICAL: Check if this spotify_uri already exists!
+                        spotify_uri_obj = SpotifyUri.from_string(found_uri)
+                        existing = await self._get_album_repo().get_by_spotify_uri(spotify_uri_obj)
+                        if existing and str(existing.id.value) != str(album.id.value):
+                            logger.debug(
+                                f"Skipping spotify_uri {found_uri} for '{album.title}' - "
+                                f"already used by '{existing.title}'"
                             )
-                            result.cover_url_found = True
+                        else:
+                            album.spotify_uri = spotify_uri_obj
+                            result.spotify_id_found = True
+                            logger.debug(f"Found Spotify URI for album '{album.title}': {found_uri}")
+                            
+                            if cover_url and (not album.cover or not album.cover.url):
+                                from soulspot.domain.value_objects import ImageRef
+                                album.cover = ImageRef(
+                                    url=cover_url,
+                                    path=album.cover.path if album.cover else None,
+                                )
+                                result.cover_url_found = True
                             
                     await asyncio.sleep(self._request_delay)
                 except Exception as e:
