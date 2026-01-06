@@ -309,9 +309,15 @@ class DeezerSyncService:
         Returns:
             Sync result with counts
         """
+        # Hey future me - log_level=DEBUG because this is called PER ARTIST in a loop!
+        # unified_library_worker._sync_albums() iterates over all owned artists.
+        # Logging INFO for each artist floods logs. Batch summary is logged separately.
+        import logging as log_module
+        
         start_time, operation_id = start_operation(
             logger,
             "deezer_sync.artist_albums",
+            log_level=log_module.DEBUG,
             deezer_artist_id=deezer_artist_id,
             limit=limit,
             force=force,
@@ -327,6 +333,7 @@ class DeezerSyncService:
                 start_time,
                 operation_id,
                 success=True,
+                log_level=log_module.DEBUG,
                 skipped="cooldown",
                 deezer_artist_id=deezer_artist_id,
             )
@@ -365,6 +372,7 @@ class DeezerSyncService:
                     start_time,
                     operation_id,
                     success=False,
+                    log_level=log_module.DEBUG,
                     error_type="artist_not_found",
                     deezer_artist_id=deezer_artist_id,
                 )
@@ -388,10 +396,13 @@ class DeezerSyncService:
             await self._session.commit()
             await self._mark_synced(cache_key)
 
-            logger.info(
-                f"DeezerSyncService: Artist {deezer_artist_id} albums synced - "
-                f"{result['albums_synced']} albums"
-            )
+            # Keep this as INFO - it's useful to see which artists actually synced
+            # But only when albums were actually added (not just checked)
+            if result["albums_synced"] > 0:
+                logger.info(
+                    f"DeezerSyncService: Artist {deezer_artist_id} albums synced - "
+                    f"{result['albums_synced']} albums"
+                )
             
             end_operation(
                 logger,
@@ -399,6 +410,7 @@ class DeezerSyncService:
                 start_time,
                 operation_id,
                 success=True,
+                log_level=log_module.DEBUG,
                 deezer_artist_id=deezer_artist_id,
                 albums_synced=result["albums_synced"],
                 errors_count=len(result["errors"]),
@@ -411,6 +423,7 @@ class DeezerSyncService:
                 extra={"error_type": type(e).__name__, "deezer_artist_id": deezer_artist_id},
             )
             result["error"] = str(e)
+            # Errors always log at ERROR level regardless of log_level param
             end_operation(logger, "deezer_sync.artist_albums", start_time, operation_id, success=False, error=e)
 
         return result

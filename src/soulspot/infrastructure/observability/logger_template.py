@@ -162,10 +162,14 @@ def log_worker_health(
 # same duration tracking but you call start_operation() and end_operation() manually. The
 # operation_id is important - it ties start/end logs together. Generate it with str(uuid.uuid4())
 # or use a unique identifier like track_id. Don't forget to call end_operation even on errors!
+#
+# NEW: log_level parameter! For batch operations (per-item in a loop), use logging.DEBUG
+# to avoid flooding logs. The batch summary should be INFO, not each individual item.
 def start_operation(
     logger: logging.Logger,
     operation: str,
     operation_id: str | None = None,
+    log_level: int = logging.INFO,
     **context: Any,
 ) -> tuple[float, str]:
     """Log operation start and return timing info.
@@ -176,6 +180,7 @@ def start_operation(
         logger: Logger instance
         operation: Operation name
         operation_id: Optional unique ID for this operation instance
+        log_level: Logging level (default INFO, use DEBUG for batch item operations)
         **context: Additional fields
         
     Returns:
@@ -185,6 +190,14 @@ def start_operation(
         >>> start_time, op_id = start_operation(logger, "sync_playlists", user_id="123")
         >>> # ... do work ...
         >>> end_operation(logger, "sync_playlists", start_time, op_id, user_id="123")
+        
+        # For batch operations (per-item logging):
+        >>> for item in items:
+        ...     start_time, op_id = start_operation(
+        ...         logger, "process_item", log_level=logging.DEBUG, item_id=item.id
+        ...     )
+        ...     # process item
+        ...     end_operation(logger, "process_item", start_time, op_id, log_level=logging.DEBUG)
     """
     import uuid
 
@@ -192,7 +205,8 @@ def start_operation(
         operation_id = str(uuid.uuid4())
 
     start_time = time.time()
-    logger.info(
+    logger.log(
+        log_level,
         f"{operation}.started",
         extra={**context, "operation_id": operation_id},
     )
@@ -206,6 +220,7 @@ def end_operation(
     operation_id: str,
     success: bool = True,
     error: Exception | None = None,
+    log_level: int = logging.INFO,
     **context: Any,
 ) -> None:
     """Log operation end with duration.
@@ -217,6 +232,8 @@ def end_operation(
         operation_id: Operation ID from start_operation()
         success: Whether operation succeeded
         error: Exception if failed (will log with exc_info=True)
+        log_level: Logging level for success (default INFO, use DEBUG for batch items)
+                   Error level is always ERROR regardless of this setting.
         **context: Additional fields (should match start_operation)
         
     Example:
@@ -233,7 +250,8 @@ def end_operation(
     duration_ms = int((time.time() - start_time) * 1000)
     
     if success:
-        logger.info(
+        logger.log(
+            log_level,
             f"{operation}.completed",
             extra={
                 **context,
@@ -242,6 +260,7 @@ def end_operation(
             },
         )
     else:
+        # Errors always log at ERROR level regardless of log_level parameter
         logger.error(
             f"{operation}.failed",
             extra={

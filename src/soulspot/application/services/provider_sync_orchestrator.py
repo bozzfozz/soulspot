@@ -199,8 +199,12 @@ class ProviderSyncOrchestrator:
         result.total = sum(result.source_counts.values())
         result.synced = result.total > 0 or not result.errors
 
-        logger.info(
-            f"ProviderSyncOrchestrator: Artist albums sync complete - "
+        # Hey future me - DEBUG not INFO here!
+        # This method is called PER ARTIST in a loop (unified_library_worker._sync_albums).
+        # Logging INFO for each artist floods the logs with hundreds of identical messages.
+        # The actual batch result is logged by unified_library_worker at INFO level.
+        logger.debug(
+            f"ProviderSyncOrchestrator: Artist albums sync - "
             f"Spotify: {result.source_counts.get('spotify', 0)}, "
             f"Deezer: {result.source_counts.get('deezer', 0)}"
         )
