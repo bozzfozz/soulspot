@@ -175,7 +175,10 @@ class PersistentJobQueue(JobQueue):
 
         return job_id
 
-    async def recover_jobs(self) -> int:
+    async def recover_jobs(
+        self,
+        exclude_types: list[JobType] | None = None,
+    ) -> int:
         """Load pending/running jobs from DB on startup.
 
         Hey future me - call this BEFORE starting workers!
@@ -185,8 +188,16 @@ class PersistentJobQueue(JobQueue):
         3. Resets RUNNING jobs (crashed workers) to PENDING
         4. Returns count of recovered jobs
 
+        Args:
+            exclude_types: Job types to SKIP during recovery. These jobs stay
+                          in DB (PENDING) but won't be loaded into memory queue.
+                          Use this to prevent conflicts during startup!
+                          Example: exclude_types=[JobType.LIBRARY_SCAN] prevents
+                          LIBRARY_SCAN from running while UnifiedLibraryManager
+                          does its initial sync.
+
         Returns:
-            Number of jobs recovered
+            Number of jobs recovered (excluding excluded types)
         """
         recovered_count = 0
         abandoned_count = 0
