@@ -180,19 +180,44 @@ class PersistentJobQueue(JobQueue):
 
         Hey future me - call this BEFORE starting workers!
         It:
-        1. Loads all PENDING jobs into memory queue
-        2. Resets RUNNING jobs (crashed workers) to PENDING
-        3. Returns count of recovered jobs
+        1. Cancels abandoned PENDING jobs (>24h old) 
+        2. Loads recent PENDING jobs into memory queue
+        3. Resets RUNNING jobs (crashed workers) to PENDING
+        4. Returns count of recovered jobs
 
         Returns:
             Number of jobs recovered
         """
         recovered_count = 0
+        abandoned_count = 0
 
         async with self._session_factory() as session:
             from soulspot.infrastructure.persistence.models import BackgroundJobModel
 
-            # First: Recover stale running jobs (crashed workers)
+            # STEP 0: Cancel abandoned PENDING jobs (>24h old)
+            # Hey future me - Jobs that sat PENDING for >24h are probably abandoned!
+            # User likely restarted container multiple times, these are "zombie" jobs.
+            abandoned_threshold = datetime.now(UTC) - timedelta(hours=24)
+            
+            abandoned_result = await session.execute(
+                update(BackgroundJobModel)
+                .where(
+                    BackgroundJobModel.status == JobStatus.PENDING.value,
+                    BackgroundJobModel.created_at < abandoned_threshold,
+                )
+                .values(
+                    status=JobStatus.CANCELLED.value,
+                    completed_at=datetime.now(UTC),
+                    error="Abandoned: Job was pending for >24h",
+                )
+            )
+            abandoned_count = abandoned_result.rowcount or 0
+            if abandoned_count > 0:
+                logger.warning(
+                    f"Cancelled {abandoned_count} abandoned jobs (pending >24h)"
+                )
+
+            # STEP 1: Recover stale running jobs (crashed workers)
             stale_threshold = datetime.now(UTC) - timedelta(seconds=self._lock_timeout)
 
             stale_result = await session.execute(
@@ -424,23 +449,27 @@ class PersistentJobQueue(JobQueue):
         return True
 
     async def cleanup_old_jobs(self, days: int = 7) -> int:
-        """Delete completed/failed/cancelled jobs older than X days.
+        """Delete old jobs from database.
 
         Hey future me - call this periodically to prevent DB bloat!
-        Jobs in terminal states (completed, failed, cancelled) are removed.
+        Deletes:
+        - Jobs in terminal states (completed, failed, cancelled) older than X days
+        - PENDING jobs older than 1 day (abandoned/zombie jobs)
 
         Args:
-            days: Delete jobs older than this many days
+            days: Delete terminal-state jobs older than this many days
 
         Returns:
             Number of jobs deleted
         """
         threshold = datetime.now(UTC) - timedelta(days=days)
+        pending_threshold = datetime.now(UTC) - timedelta(days=1)  # 24h for pending
 
         async with self._session_factory() as session:
             from soulspot.infrastructure.persistence.models import BackgroundJobModel
 
-            result = await session.execute(
+            # Delete old completed/failed/cancelled jobs
+            terminal_result = await session.execute(
                 delete(BackgroundJobModel).where(
                     BackgroundJobModel.status.in_(
                         [
@@ -452,13 +481,28 @@ class PersistentJobQueue(JobQueue):
                     BackgroundJobModel.completed_at < threshold,
                 )
             )
+            terminal_deleted = terminal_result.rowcount or 0
+
+            # Delete old abandoned PENDING jobs (>24h)
+            # Hey future me - these are zombie jobs that never started!
+            pending_result = await session.execute(
+                delete(BackgroundJobModel).where(
+                    BackgroundJobModel.status == JobStatus.PENDING.value,
+                    BackgroundJobModel.created_at < pending_threshold,
+                )
+            )
+            pending_deleted = pending_result.rowcount or 0
+            
             await session.commit()
 
-            deleted = result.rowcount or 0
-            if deleted > 0:
-                logger.info(f"Cleaned up {deleted} old jobs (>{days} days)")
+            total_deleted = terminal_deleted + pending_deleted
+            if total_deleted > 0:
+                logger.info(
+                    f"Cleaned up {total_deleted} old jobs "
+                    f"({terminal_deleted} terminal, {pending_deleted} pending)"
+                )
 
-            return deleted
+            return total_deleted
 
     def get_stats(self) -> PersistentJobQueueStats:
         """Get queue statistics."""

@@ -252,8 +252,17 @@ def configure_logging(
         # Hey future me - Uses CompactExceptionFormatter to remove verbose Python traceback boilerplate!
         # Shows: timestamp | level | module:line | message
         # Exceptions are formatted compactly with ╰─► markers instead of "The above exception..."
+        #
+        # WICHTIG: Wir nutzen %(module)s (nur Dateiname) statt %(name)s (voller Pfad)
+        # damit Box-Drawing-Logs sauber aligned bleiben! Sonst:
+        #   soulspot.application.workers.unified_library_worker:980 │   ├─►
+        #   soulspot.api.routers.library:45                         │   └─►
+        # Die variable Länge zerstört die vertikale Ausrichtung der Box-Zeichen!
+        # Mit %(module)s:
+        #   unified_library_worker:980 │   ├─►
+        #   library:45                 │   └─►
         formatter = CompactExceptionFormatter(
-            fmt="%(asctime)s │ %(levelname)-7s │ %(name)s:%(lineno)d │ %(message)s",
+            fmt="%(asctime)s │ %(levelname)-7s │ %(module)s:%(lineno)d │ %(message)s",
             datefmt="%H:%M:%S",
         )
 
