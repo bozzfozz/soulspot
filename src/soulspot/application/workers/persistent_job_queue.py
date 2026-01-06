@@ -241,7 +241,10 @@ class PersistentJobQueue(JobQueue):
                 self._stats.recovered_jobs += stale_count
 
             # Now: Load all pending jobs into memory queue
-            result = await session.execute(
+            # Hey future me - exclude_types allows skipping certain job types!
+            # This prevents LIBRARY_SCAN from auto-recovering during startup,
+            # which would conflict with UnifiedLibraryManager's initial sync.
+            query = (
                 select(BackgroundJobModel)
                 .where(BackgroundJobModel.status == JobStatus.PENDING.value)
                 .order_by(
@@ -249,6 +252,18 @@ class PersistentJobQueue(JobQueue):
                     BackgroundJobModel.created_at,
                 )
             )
+            
+            # Filter out excluded job types
+            if exclude_types:
+                excluded_type_values = [jt.value for jt in exclude_types]
+                query = query.where(
+                    ~BackgroundJobModel.job_type.in_(excluded_type_values)
+                )
+                logger.info(
+                    f"Excluding job types from recovery: {excluded_type_values}"
+                )
+            
+            result = await session.execute(query)
             pending_models = result.scalars().all()
 
             await session.commit()

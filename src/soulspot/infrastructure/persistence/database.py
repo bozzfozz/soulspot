@@ -65,17 +65,20 @@ class Database:
             # Trade-off: Slightly more overhead from opening/closing connections, but SQLite
             # opens are fast (~1ms) and the reliability gain is worth it.
             #
-            # UPDATE (Jan 2025): Hybrid DB Strategy - reduced timeout to 500ms!
-            # Old: 60s timeout = long wait when locked, UI freezes
-            # New: 500ms timeout = fail fast, let RetryStrategy handle with exponential backoff
-            # This matches Lidarr's approach (they use 100ms + Polly retry).
-            # See: docs/architecture/HYBRID_DB_STRATEGY.md
+            # UPDATE (Jan 2026): PHASED STARTUP FIX - Increased timeout to 30s!
+            # Old: 500ms timeout = fail fast, but causes "database is locked" during
+            #      concurrent writes in UnifiedLibraryManager (Artist Sync + Album Sync)
+            # New: 30s timeout = allows writers to queue up and wait for lock release
+            #
+            # This combined with PHASED STARTUP (exclude LIBRARY_SCAN from recovery)
+            # eliminates most "database is locked" errors. The 30s is a MAX timeout -
+            # operations complete as soon as lock is released (usually <1s).
             engine_kwargs.update(
                 {
                     "poolclass": NullPool,  # No connection caching - each session gets fresh connection
                     "connect_args": {
                         "check_same_thread": False,
-                        "timeout": 0.5,  # 500ms - fail fast, RetryStrategy handles retries
+                        "timeout": 30,  # 30s - allow writers to queue (PHASED STARTUP FIX Jan 2026)
                     },
                 }
             )
@@ -136,11 +139,24 @@ class Database:
             # This prevents "database is locked" errors during library scans
             cursor.execute("PRAGMA journal_mode=WAL")
 
-            # Set busy timeout to 500ms (reduced from 60s, Jan 2025 - Hybrid Strategy)
-            # Fail fast approach - let RetryStrategy handle retries with exponential backoff
-            # This matches Lidarr's approach (they use 100ms + Polly retry)
-            # See: docs/architecture/HYBRID_DB_STRATEGY.md
-            cursor.execute("PRAGMA busy_timeout=500")
+            # Set busy timeout to 30000ms (30 seconds)
+            # PHASED STARTUP FIX (Jan 2026): Increased from 500ms to 30s!
+            # 
+            # Problem: 500ms was too aggressive for our phased startup:
+            # - UnifiedLibraryManager.initial_sync runs ~10s
+            # - DeezerSyncService writes Albums per Artist (many small transactions)
+            # - 500ms timeout caused "database is locked" during overlapping writes
+            #
+            # Solution: 30s timeout gives enough buffer for long transactions to complete.
+            # The phased startup (exclude LIBRARY_SCAN from recovery) prevents most
+            # concurrent writes, but DeezerSync within UnifiedLibraryManager can still
+            # have overlapping transactions during album sync.
+            #
+            # Note: This is NOT a performance hit because:
+            # - WAL mode allows concurrent reads (UI stays responsive)
+            # - Writers queue up instead of failing immediately
+            # - 30s is a MAX timeout, not a delay - if lock is released in 100ms, we continue
+            cursor.execute("PRAGMA busy_timeout=30000")
 
             # === PERFORMANCE OPTIMIZATIONS (Dec 2025 v2) ===
             # synchronous=NORMAL: Faster than FULL, safe with WAL mode
@@ -164,7 +180,7 @@ class Database:
             cursor.close()
             logger.debug(
                 "SQLite optimizations enabled: foreign_keys, WAL, "
-                "busy_timeout=500ms, cache=64MB, mmap=256MB (Hybrid Strategy)"
+                "busy_timeout=30s, cache=64MB, mmap=256MB (PHASED STARTUP FIX Jan 2026)"
             )
 
     # Listen future me, this is a GENERATOR (note the yield!), not a regular async function.

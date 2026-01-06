@@ -690,27 +690,37 @@ class UnifiedLibraryManager:
         After this, routes can immediately show data from DB.
         Without this, users would see empty pages on first visit.
         
-        Note: This ignores cooldowns - it's an INITIAL sync!
+        PHASED STARTUP (Jan 2026 - FIX):
+        The initial sync ONLY does provider sync (Spotify/Deezer).
+        Library scan is handled separately via LIBRARY_SCAN jobs.
+        
+        NOTE: We DON'T run library scan here because:
+        - LIBRARY_SCAN jobs may be pending in DB from previous runs
+        - Running two scans simultaneously → "database is locked"
+        - User can trigger manual scan via UI if needed
+        
+        The main loop will run ENRICHMENT and IMAGE_SYNC after this.
         """
         logger.info("=" * 60)
         logger.info("INITIAL SYNC STARTING (WORKER-FIRST mode)")
         logger.info("=" * 60)
         
-        # Phase 1: Sync Artists
+        # Phase 1: Sync Artists from Providers
+        # Only syncs from Spotify/Deezer - local files handled by LibraryScannerService
         logger.info("[1/3] Syncing Artists...")
         try:
             await self._sync_artists()
         except Exception as e:
             logger.warning(f"[1/3] Artist sync failed: {e}")
         
-        # Phase 2: Sync Albums for all artists
+        # Phase 2: Sync Albums for all artists with provider IDs
         logger.info("[2/3] Syncing Albums...")
         try:
             await self._sync_albums()
         except Exception as e:
             logger.warning(f"[2/3] Album sync failed: {e}")
         
-        # Phase 3: Sync Tracks for all albums
+        # Phase 3: Sync Tracks for albums that need track backfill
         logger.info("[3/3] Syncing Tracks...")
         try:
             await self._sync_tracks()

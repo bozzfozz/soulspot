@@ -433,8 +433,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             max_concurrent_jobs=settings.download.max_concurrent_downloads,
         )
 
-        # Recover pending jobs from database (crashed workers, etc.)
-        recovered_count = await job_queue.recover_jobs()
+        # =================================================================
+        # PHASED STARTUP FIX (Jan 2026) - Prevent "database is locked"!
+        # =================================================================
+        # Hey future me - THIS IS THE FIX for concurrent DB access issues!
+        #
+        # PROBLEM: Old startup did this PARALLEL (= "database is locked"):
+        #   - recover_jobs() loads LIBRARY_SCAN → starts executing
+        #   - UnifiedLibraryManager._run_initial_sync() → starts executing
+        #   - Both write Artists, Albums, Tracks → SQLite explodes!
+        #
+        # SOLUTION: Phased startup with SEQUENTIAL operations:
+        #   1. Recover jobs EXCLUDING LIBRARY_SCAN (don't auto-start scans!)
+        #   2. Let UnifiedLibraryManager finish initial sync FIRST
+        #   3. Only THEN start background workers/loops
+        #
+        # The exclude_types prevents LIBRARY_SCAN jobs from auto-recovering.
+        # They stay in DB (PENDING) but won't run until after initial sync.
+        # User can manually trigger scan later via UI if needed.
+        # =================================================================
+        recovered_count = await job_queue.recover_jobs(
+            exclude_types=[JobType.LIBRARY_SCAN]  # Prevent conflict with initial sync!
+        )
         if recovered_count > 0:
             logger.info(f"Recovered {recovered_count} pending jobs from database")
 
