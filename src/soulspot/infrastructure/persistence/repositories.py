@@ -8,7 +8,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
-from sqlalchemy import Integer, delete, func, or_, select, update
+from sqlalchemy import Integer, and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -846,6 +846,53 @@ class ArtistRepository(IArtistRepository):
 
         return [self._model_to_entity(model) for model in models]
 
+    # =========================================================================
+    # UNIVERSAL ID ENRICHMENT METHODS
+    # =========================================================================
+    # Hey future me - these methods support UniversalIdEnrichmentService!
+    # They find entities that are missing provider IDs (deezer_id, spotify_uri)
+    # so we can enrich them via name-based search.
+    # =========================================================================
+
+    async def get_artists_missing_provider_ids(self, limit: int = 50) -> list[Artist]:
+        """Get artists missing provider IDs for enrichment.
+
+        Hey future me - THIS IS THE UNIVERSAL ENRICHMENT QUERY!
+        Returns artists where BOTH deezer_id AND spotify_uri are NULL.
+        These are typically local imports that need ID discovery.
+
+        Args:
+            limit: Maximum number of artists to return
+
+        Returns:
+            List of Artist entities missing provider IDs
+        """
+        from soulspot.domain.value_objects.album_types import VARIOUS_ARTISTS_PATTERNS
+
+        stmt = (
+            select(ArtistModel)
+            .where(
+                and_(
+                    ArtistModel.deezer_id.is_(None),
+                    ArtistModel.spotify_uri.is_(None),
+                )
+            )
+            .order_by(ArtistModel.name)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        # Filter out Various Artists patterns
+        enrichable = []
+        for model in models:
+            name_lower = model.name.lower()
+            if any(pattern in name_lower for pattern in VARIOUS_ARTISTS_PATTERNS):
+                continue
+            enrichable.append(self._model_to_entity(model))
+
+        return enrichable
+
 
 class AlbumRepository(IAlbumRepository):
     """SQLAlchemy implementation of Album repository."""
@@ -1599,6 +1646,41 @@ class AlbumRepository(IAlbumRepository):
 
         result = await self.session.execute(stmt)
         models = result.scalars().all()
+        return [self._model_to_entity(model) for model in models]
+
+    # =========================================================================
+    # UNIVERSAL ID ENRICHMENT METHODS
+    # =========================================================================
+    # Hey future me - these methods support UniversalIdEnrichmentService!
+    # =========================================================================
+
+    async def get_albums_missing_provider_ids(self, limit: int = 50) -> list[Album]:
+        """Get albums missing provider IDs for enrichment.
+
+        Hey future me - THIS IS THE UNIVERSAL ENRICHMENT QUERY!
+        Returns albums where BOTH deezer_id AND spotify_uri are NULL.
+        These are typically local imports that need ID discovery.
+
+        Args:
+            limit: Maximum number of albums to return
+
+        Returns:
+            List of Album entities missing provider IDs
+        """
+        stmt = (
+            select(AlbumModel)
+            .where(
+                and_(
+                    AlbumModel.deezer_id.is_(None),
+                    AlbumModel.spotify_uri.is_(None),
+                )
+            )
+            .order_by(AlbumModel.title)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
         return [self._model_to_entity(model) for model in models]
 
 
@@ -2429,6 +2511,41 @@ class TrackRepository(ITrackRepository):
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
+
+    # =========================================================================
+    # UNIVERSAL ID ENRICHMENT METHODS
+    # =========================================================================
+    # Hey future me - these methods support UniversalIdEnrichmentService!
+    # =========================================================================
+
+    async def get_tracks_missing_provider_ids(self, limit: int = 50) -> list[Track]:
+        """Get tracks missing provider IDs for enrichment.
+
+        Hey future me - THIS IS THE UNIVERSAL ENRICHMENT QUERY!
+        Returns tracks where BOTH deezer_id AND spotify_uri are NULL.
+        These are typically local imports that need ID discovery.
+
+        Args:
+            limit: Maximum number of tracks to return
+
+        Returns:
+            List of Track entities missing provider IDs
+        """
+        stmt = (
+            select(TrackModel)
+            .where(
+                and_(
+                    TrackModel.deezer_id.is_(None),
+                    TrackModel.spotify_uri.is_(None),
+                )
+            )
+            .order_by(TrackModel.title)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [self._model_to_entity(model) for model in models]
 
 
 class PlaylistRepository(IPlaylistRepository):

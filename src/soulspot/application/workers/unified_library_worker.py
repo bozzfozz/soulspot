@@ -1454,7 +1454,7 @@ class UnifiedLibraryManager:
                 await session.commit()
 
                 logger.info(
-                    f"✅ Enrichment complete: "
+                    f"✅ MusicBrainz enrichment complete: "
                     f"Artists: {stats.get('artists_enriched', 0)}/{stats.get('artists_processed', 0)}, "
                     f"Albums: {stats.get('albums_enriched', 0)}/{stats.get('albums_processed', 0)}"
                 )
@@ -1463,18 +1463,61 @@ class UnifiedLibraryManager:
                 logger.warning(f"MusicBrainz enrichment failed: {e}")
                 # Don't fail the whole task - just log and continue
 
+            # ================================================================
+            # PHASE 2: CROSS-PROVIDER ID ENRICHMENT
+            # ================================================================
+            # Hey future me - this adds Deezer/Spotify IDs to entities that are missing them!
+            # Works incrementally: entities get provider IDs over time via name search.
+            # Once an entity has both deezer_id AND spotify_uri, future lookups are FAST
+            # (direct ID lookup instead of slow name search).
+            #
+            # Deezer: NO AUTH required! Can enrich all entities.
+            # Spotify: Requires OAuth, only enriches if user authenticated.
+            try:
+                from soulspot.application.services.universal_id_enrichment_service import (
+                    UniversalIdEnrichmentService,
+                )
+
+                id_enrichment = UniversalIdEnrichmentService(
+                    session=session,
+                    deezer_plugin=self._deezer_plugin,
+                    spotify_plugin=self._spotify_plugin,
+                )
+
+                id_stats = await id_enrichment.enrich_entities_missing_ids(
+                    batch_size=batch_size
+                )
+
+                await session.commit()
+
+                logger.info(
+                    f"🔗 Cross-Provider ID enrichment: "
+                    f"Artists: {id_stats.artists_enriched}/{id_stats.artists_processed}, "
+                    f"Albums: {id_stats.albums_enriched}/{id_stats.albums_processed}, "
+                    f"Tracks: {id_stats.tracks_enriched}/{id_stats.tracks_processed} "
+                    f"(Deezer: {id_stats.deezer_matches}, Spotify: {id_stats.spotify_matches})"
+                )
+
+            except Exception as e:
+                logger.warning(f"Cross-Provider ID enrichment failed: {e}")
+                # Don't fail the whole task - MusicBrainz enrichment still succeeded
+
     async def _sync_images(self) -> None:
         """Download/cache images for artists and albums.
 
         Hey future me - THIS DOES THE FULL IMAGE PIPELINE!
-        1. Find entities with missing image_url → fetch from Deezer
+        1. Find entities with missing image_url → fetch from Deezer/Spotify
         2. Find entities with URL but no local file → download and cache
 
         Process:
         Phase 1: URL Enrichment
         - Find artists/albums with missing image_url
-        - Query Deezer (no auth!) for images
+        - Query Deezer (no auth!) for images by ID or NAME SEARCH
         - Update image_url in DB
+        
+        IMPORTANT (Jan 2025): For LOCAL entities (imported from /music), we now
+        also do a NAME SEARCH on Deezer to find images! Previously only entities
+        with deezer_id were enriched.
 
         Phase 2: Local Download
         - Find artists/albums with URL but no local image_path
@@ -1503,13 +1546,13 @@ class UnifiedLibraryManager:
 
             # Log service call
             logger.info(LogMessages.task_flow_service(
-                "ImageService", "download_and_cache() + URL enrichment"
+                "ImageService", "download_and_cache() + URL enrichment (incl. name search)"
             ))
 
             # ================================================================
             # PHASE 1: URL ENRICHMENT (fetch URLs from Deezer)
             # ================================================================
-            urls_fetched = {"artists": 0, "albums": 0}
+            urls_fetched = {"artists": 0, "artists_by_search": 0, "albums": 0, "albums_by_search": 0}
 
             # Get artists missing image URL
             try:
@@ -1517,19 +1560,44 @@ class UnifiedLibraryManager:
                 if artists and self._deezer_plugin:
                     for artist in artists:
                         try:
+                            image_url = None
+                            
+                            # Strategy 1: Direct ID lookup (fast, accurate)
                             if artist.deezer_id:
                                 artist_data = await self._deezer_plugin.get_artist(
                                     artist.deezer_id
                                 )
                                 if artist_data and artist_data.image_url:
-                                    from soulspot.domain.value_objects import ImageRef
-
-                                    artist.image = ImageRef(
-                                        url=artist_data.image_url,
-                                        path=artist.image.path,
-                                    )
-                                    await artist_repo.update(artist)
+                                    image_url = artist_data.image_url
                                     urls_fetched["artists"] += 1
+                            
+                            # Strategy 2: Name search for LOCAL artists without deezer_id
+                            # Hey future me - THIS IS THE FIX for imported local artists!
+                            if not image_url and artist.name:
+                                search_results = await self._deezer_plugin.search_artists(
+                                    artist.name, limit=1
+                                )
+                                if search_results and search_results.items:
+                                    best_match = search_results.items[0]
+                                    if best_match.image_url:
+                                        image_url = best_match.image_url
+                                        # Also save deezer_id for future lookups!
+                                        if best_match.deezer_id:
+                                            artist.deezer_id = best_match.deezer_id
+                                        urls_fetched["artists_by_search"] += 1
+                                        logger.debug(
+                                            f"Found image for local artist '{artist.name}' via Deezer search"
+                                        )
+                            
+                            # Update artist if we found an image URL
+                            if image_url:
+                                from soulspot.domain.value_objects import ImageRef
+                                artist.image = ImageRef(
+                                    url=image_url,
+                                    path=artist.image.path if artist.image else None,
+                                )
+                                await artist_repo.update(artist)
+                            
                             await asyncio.sleep(0.2)  # Rate limit
                         except Exception as e:
                             logger.debug(f"Failed to get URL for artist {artist.name}: {e}")
@@ -1540,17 +1608,62 @@ class UnifiedLibraryManager:
             try:
                 albums = await album_repo.get_albums_without_cover_url(limit=batch_size)
                 if albums and self._deezer_plugin:
+                    # Pre-fetch artist names for all albums (batch lookup, more efficient)
+                    # Hey future me - Album entity has artist_id: ArtistId, NOT artist_name!
+                    artist_names: dict[str, str] = {}
+                    unique_artist_ids = {album.artist_id for album in albums}
+                    for aid in unique_artist_ids:
+                        try:
+                            artist = await artist_repo.get_by_id(aid)  # ArtistId object
+                            if artist:
+                                artist_names[str(aid)] = artist.name
+                        except Exception:
+                            pass  # Continue without artist name
+                    
                     for album in albums:
                         try:
+                            cover_url = None
+                            
+                            # Strategy 1: Direct ID lookup
                             if album.deezer_id:
                                 album_data = await self._deezer_plugin.get_album(
                                     album.deezer_id
                                 )
                                 if album_data and album_data.cover_url:
-                                    await album_repo.update_cover_url(
-                                        album.id, album_data.cover_url
-                                    )
+                                    cover_url = album_data.cover_url
                                     urls_fetched["albums"] += 1
+                            
+                            # Strategy 2: Search by album title + artist name
+                            # Hey future me - THIS IS THE FIX for imported local albums!
+                            if not cover_url and album.title:
+                                # Build search query: "Artist - Album" (better search results)
+                                artist_name = artist_names.get(str(album.artist_id))
+                                search_query = album.title
+                                if artist_name:
+                                    search_query = f"{artist_name} {album.title}"
+                                
+                                search_results = await self._deezer_plugin.search_albums(
+                                    search_query, limit=1
+                                )
+                                if search_results and search_results.items:
+                                    best_match = search_results.items[0]
+                                    if best_match.cover_url:
+                                        cover_url = best_match.cover_url
+                                        # Also save deezer_id for future lookups!
+                                        if best_match.deezer_id:
+                                            album.deezer_id = best_match.deezer_id
+                                        urls_fetched["albums_by_search"] += 1
+                                        logger.debug(
+                                            f"Found cover for local album '{album.title}' via Deezer search"
+                                        )
+                            
+                            # Update album if we found a cover URL
+                            if cover_url:
+                                await album_repo.update_cover_url(album.id, cover_url)
+                                # Also update deezer_id if found via search
+                                if hasattr(album, 'deezer_id') and album.deezer_id:
+                                    await album_repo.update(album)
+                            
                             await asyncio.sleep(0.2)  # Rate limit
                         except Exception as e:
                             logger.debug(f"Failed to get URL for album {album.title}: {e}")
@@ -1560,8 +1673,9 @@ class UnifiedLibraryManager:
             await session.commit()
 
             logger.info(
-                f"📥 Phase 1 URL enrichment: {urls_fetched['artists']} artists, "
-                f"{urls_fetched['albums']} albums"
+                f"📥 Phase 1 URL enrichment: "
+                f"Artists: {urls_fetched['artists']} (ID) + {urls_fetched['artists_by_search']} (search), "
+                f"Albums: {urls_fetched['albums']} (ID) + {urls_fetched['albums_by_search']} (search)"
             )
 
             # ================================================================
