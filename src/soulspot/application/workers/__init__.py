@@ -1,4 +1,11 @@
-"""Worker system - Background job processing."""
+"""Worker system - Background work item processing.
+
+NAMING CONVENTION:
+- "WorkItem" is the preferred user-facing term (clearer, more intuitive)
+- "Job" is the internal implementation term (historical, widely used)
+- Both refer to the same concept: a unit of work to be processed
+- Use WorkItem in UI, docs, and new code; Job in internal implementation
+"""
 
 from soulspot.application.workers.automation_workers import (
     AutomationWorkerManager,
@@ -9,7 +16,17 @@ from soulspot.application.workers.automation_workers import (
 from soulspot.application.workers.download_queue_worker import DownloadQueueWorker
 from soulspot.application.workers.download_status_worker import DownloadStatusWorker
 from soulspot.application.workers.download_worker import DownloadWorker
-from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
+from soulspot.application.workers.job_queue import (
+    Job,
+    JobQueue,
+    JobStatus,
+    JobType,
+    # WorkItem aliases
+    WorkItem,
+    WorkItemQueue,
+    WorkItemStatus,
+    WorkItemType,
+)
 from soulspot.application.workers.orchestrator import (
     WorkerOrchestrator,
     WorkerState,
@@ -19,6 +36,7 @@ from soulspot.application.workers.orchestrator import (
 from soulspot.application.workers.persistent_job_queue import (
     PersistentJobQueue,
     PersistentJobQueueStats,
+    PersistentWorkItemQueue,
     create_persistent_job_queue,
 )
 from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
@@ -30,10 +48,16 @@ from soulspot.application.workers.unified_library_worker import (
 )
 
 __all__ = [
-    # Job Queue
+    # Job Queue (internal names)
+    "Job",
     "JobQueue",
     "JobStatus",
     "JobType",
+    # WorkItem Queue (user-friendly aliases)
+    "WorkItem",
+    "WorkItemQueue",
+    "WorkItemStatus",
+    "WorkItemType",
     # Worker Orchestrator
     "WorkerOrchestrator",
     "WorkerState",
@@ -42,6 +66,7 @@ __all__ = [
     # Persistent Job Queue
     "PersistentJobQueue",
     "PersistentJobQueueStats",
+    "PersistentWorkItemQueue",  # Alias
     "create_persistent_job_queue",
     # Core Workers
     "DownloadWorker",

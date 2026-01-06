@@ -1,4 +1,11 @@
-"""Job queue management for background workers."""
+"""Job queue management for background workers.
+
+NAMING CONVENTION (Jan 2026):
+- "WorkItem" = Preferred new name for persistent, recoverable work units
+- "Job" = Legacy name (still works, aliased to WorkItem)
+
+Use "WorkItem" in new code, "Job" still works for backward compatibility.
+"""
 
 import asyncio
 import logging
@@ -438,3 +445,24 @@ class JobQueue:
             "cancelled": len([j for j in jobs if j.status == JobStatus.CANCELLED]),
             "queue_size": self._queue.qsize(),
         }
+
+
+# =============================================================================
+# ALIASES: WorkItem = Job (Jan 2026)
+# =============================================================================
+# Hey future me - "WorkItem" is the NEW preferred name!
+# "Job" still works for backward compatibility, but use "WorkItem" in new code.
+#
+# WorkItem = Persistent, recoverable work unit stored in DB
+# Task = One-shot async operation (not persistent)
+# Worker = Long-running background process
+#
+# Example:
+#   from soulspot.application.workers.job_queue import WorkItemType, WorkItem
+#   work_item = WorkItem(id="...", job_type=WorkItemType.DOWNLOAD, ...)
+# =============================================================================
+
+WorkItemType = JobType
+WorkItemStatus = JobStatus
+WorkItem = Job
+WorkItemQueue = JobQueue

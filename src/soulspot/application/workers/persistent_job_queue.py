@@ -1,6 +1,12 @@
-"""Persistent Job Queue - Database-backed job queue that survives restarts.
+"""Persistent Job Queue - Database-backed work item queue that survives restarts.
 
-Hey future me - this is the PERSISTENT job storage layer!
+Hey future me - this is the PERSISTENT work item storage layer!
+
+NAMING CONVENTION:
+- "WorkItem" is the preferred user-facing term (clearer, more intuitive)
+- "Job" is the internal implementation term (historical, widely used in codebase)
+- Both refer to the same concept: a unit of work to be processed
+- Use WorkItem in UI, docs, and new code; Job in internal implementation
 
 PROBLEM:
 The in-memory JobQueue loses all jobs when the app restarts.
@@ -577,3 +583,34 @@ def create_persistent_job_queue(
         max_concurrent_jobs=max_concurrent_jobs,
         worker_id=worker_id,
     )
+
+
+# =============================================================================
+# ALIASES: WorkItem terminology for clarity
+# =============================================================================
+# "WorkItem" is the preferred term for users and documentation.
+# "Job" is the internal term used throughout the codebase.
+# These aliases allow gradual adoption of clearer naming.
+
+# Import from job_queue module for consistency
+from soulspot.application.workers.job_queue import (
+    WorkItem,
+    WorkItemQueue,
+    WorkItemStatus,
+    WorkItemType,
+)
+
+# Alias for the persistent version
+PersistentWorkItemQueue = PersistentJobQueue
+
+__all__ = [
+    # Primary internal names
+    "PersistentJobQueue",
+    "create_persistent_job_queue",
+    # User-friendly aliases
+    "PersistentWorkItemQueue",
+    "WorkItem",
+    "WorkItemQueue",
+    "WorkItemStatus",
+    "WorkItemType",
+]
